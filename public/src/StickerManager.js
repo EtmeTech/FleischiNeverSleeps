@@ -1,8 +1,9 @@
 /**
- * FleischiNeverSleeps - StickerManager (v7)
- * - Dual-Zone Support für SchoolLevelManager (School Hallway + 2er-Potenzen-Treppenhaus gleichzeitig!)
- * - Automatische Treppenturm- & 3D-Schild-Erkennung für das 2er-Potenzen-Treppenhaus
- * - Mega Labyrinth: Mind. 20m Abstand zum Spawn, verteilt in echten Gängen + Live-Radar-Karte
+ * FleischiNeverSleeps - StickerManager (v8 - Zero Frame-Drop Edition)
+ * - Eliminiert Shader-Recompiles (kein PointLight-Add/Remove mehr, reines Additive-Glow)
+ * - Vorab-Caching aller Texturen & Geometrien (0ms Spawn-Cost)
+ * - 1 einzelnes THREE.Points-Objekt statt 26 Einzel-Meshes pro Sticker
+ * - Schnelle 2D-AABB-Raumprüfung statt tausender Raycasts beim Spawnen
  */
 (function () {
   'use strict';
@@ -125,7 +126,19 @@
     return false;
   }
 
-  // --- THREE.JS & CANVAS TEXTURE TRACKING ---
+  // --- GLOBAL POOLS & CACHES (Verhindert jegliche Frame-Drops beim Spawnen/Entfernen) ---
+  const texturePool = {
+    normal: {},
+    gold: {},
+    glowWhite: null,
+    glowGold: null,
+    rays: null,
+    particleDot: null
+  };
+  let sharedPlaneGeo = null;
+  let sharedOverlayGeo = null;
+  let sharedParticleGeo = null;
+
   let currentScene = null;
   let currentCamera = null;
   let activeLevelKey = null;
@@ -139,7 +152,6 @@
   let levelLoadTimestamp = 0;
   let collectedInCurrentRun = {};
 
-  // Markiert Canvas-Texturen, auf die das Spiel "GESUCHTER AUSGANG", "FOLGE:" oder Türnummern ("2^8") schreibt
   (function hookCanvasFillText() {
     if (!window.CanvasRenderingContext2D) return;
     const origFillText = CanvasRenderingContext2D.prototype.fillText;
@@ -175,15 +187,20 @@
         return origRender.apply(this, arguments);
       };
       rendererHooked = true;
+      initSharedResources();
     }
   }
 
-  // --- SOUND ---
+  // --- SOUND (Wiederverwendeter AudioContext verhindert Audio-Freeze!) ---
+  let sharedAudioCtx = null;
   function playLegoCollectSound(isGold) {
     try {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       if (!AudioCtx) return;
-      const ctx = new AudioCtx();
+      if (!sharedAudioCtx) sharedAudioCtx = new AudioCtx();
+      if (sharedAudioCtx.state === 'suspended') sharedAudioCtx.resume();
+
+      const ctx = sharedAudioCtx;
       const now = ctx.currentTime;
       const notes = isGold
         ? [523.25, 659.25, 783.99, 1046.5, 1318.5, 1567.98, 2093.0]
@@ -195,44 +212,44 @@
         osc.type = isGold ? 'triangle' : 'sine';
         osc.frequency.setValueAtTime(freq, now + idx * 0.08);
         gain.gain.setValueAtTime(0.001, now + idx * 0.08);
-        gain.gain.exponentialRampToValueAtTime(0.16, now + idx * 0.08 + 0.025);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + idx * 0.08 + 0.48);
+        gain.gain.exponentialRampToValueAtTime(0.15, now + idx * 0.08 + 0.025);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + idx * 0.08 + 0.45);
         osc.connect(gain);
         gain.connect(ctx.destination);
         osc.start(now + idx * 0.08);
-        osc.stop(now + idx * 0.08 + 0.52);
+        osc.stop(now + idx * 0.08 + 0.5);
       });
 
-      const finalTime = now + 1.25;
+      const finalTime = now + 1.2;
       [1046.5, 1567.98, 2093.0].forEach(freq => {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.type = 'sine';
         osc.frequency.setValueAtTime(freq, finalTime);
         gain.gain.setValueAtTime(0.001, finalTime);
-        gain.gain.exponentialRampToValueAtTime(0.2, finalTime + 0.02);
-        gain.gain.exponentialRampToValueAtTime(0.0001, finalTime + 0.8);
+        gain.gain.exponentialRampToValueAtTime(0.18, finalTime + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, finalTime + 0.75);
         osc.connect(gain);
         gain.connect(ctx.destination);
         osc.start(finalTime);
-        osc.stop(finalTime + 0.85);
+        osc.stop(finalTime + 0.8);
       });
     } catch (e) {}
   }
 
-  // --- TEXTURES ---
+  // --- SHARED TEXTURE & GEOMETRY POOL ---
   function createGlowTexture(c1, c2) {
     const canvas = document.createElement('canvas');
     canvas.dataset.fnsInternal = '1';
-    canvas.width = 256;
-    canvas.height = 256;
+    canvas.width = 128;
+    canvas.height = 128;
     const ctx = canvas.getContext('2d');
-    const g = ctx.createRadialGradient(128, 128, 8, 128, 128, 128);
+    const g = ctx.createRadialGradient(64, 64, 4, 64, 64, 64);
     g.addColorStop(0.0, c1);
     g.addColorStop(0.45, c2);
     g.addColorStop(1.0, 'rgba(255,255,255,0)');
     ctx.fillStyle = g;
-    ctx.fillRect(0, 0, 256, 256);
+    ctx.fillRect(0, 0, 128, 128);
     const tex = new window.THREE.CanvasTexture(canvas);
     tex.needsUpdate = true;
     return tex;
@@ -241,23 +258,23 @@
   function createRaysTexture() {
     const canvas = document.createElement('canvas');
     canvas.dataset.fnsInternal = '1';
-    canvas.width = 512;
-    canvas.height = 512;
+    canvas.width = 256;
+    canvas.height = 256;
     const ctx = canvas.getContext('2d');
-    ctx.translate(256, 256);
+    ctx.translate(128, 128);
     const rays = 12;
     for (let i = 0; i < rays; i++) {
       ctx.save();
       ctx.rotate((i * Math.PI * 2) / rays);
-      const g = ctx.createLinearGradient(0, 0, 245, 0);
+      const g = ctx.createLinearGradient(0, 0, 122, 0);
       g.addColorStop(0.0, 'rgba(255, 255, 255, 1.0)');
       g.addColorStop(0.45, 'rgba(255, 252, 220, 0.55)');
       g.addColorStop(1.0, 'rgba(255, 255, 255, 0.0)');
       ctx.fillStyle = g;
       ctx.beginPath();
       ctx.moveTo(0, 0);
-      ctx.lineTo(245, -18);
-      ctx.lineTo(245, 18);
+      ctx.lineTo(122, -9);
+      ctx.lineTo(122, 9);
       ctx.closePath();
       ctx.fill();
       ctx.restore();
@@ -271,29 +288,29 @@
     const THREE = window.THREE;
     const canvas = document.createElement('canvas');
     canvas.dataset.fnsInternal = '1';
-    canvas.width = 512;
-    canvas.height = 512;
+    canvas.width = 256;
+    canvas.height = 256;
     const ctx = canvas.getContext('2d');
 
-    ctx.drawImage(img, 0, 0, 512, 512);
+    ctx.drawImage(img, 0, 0, 256, 256);
 
     if (isGold) {
       ctx.save();
       ctx.globalCompositeOperation = 'multiply';
-      const goldGrad = ctx.createLinearGradient(0, 0, 512, 512);
+      const goldGrad = ctx.createLinearGradient(0, 0, 256, 256);
       goldGrad.addColorStop(0.0, '#ffd700');
       goldGrad.addColorStop(0.35, '#ffef8a');
       goldGrad.addColorStop(0.65, '#d4af37');
       goldGrad.addColorStop(1.0, '#ffae00');
       ctx.fillStyle = goldGrad;
-      ctx.fillRect(0, 0, 512, 512);
+      ctx.fillRect(0, 0, 256, 256);
 
       ctx.globalCompositeOperation = 'screen';
       ctx.fillStyle = 'rgba(255, 200, 20, 0.22)';
-      ctx.fillRect(0, 0, 512, 512);
+      ctx.fillRect(0, 0, 256, 256);
 
       ctx.globalCompositeOperation = 'destination-in';
-      ctx.drawImage(img, 0, 0, 512, 512);
+      ctx.drawImage(img, 0, 0, 256, 256);
       ctx.restore();
     }
 
@@ -303,11 +320,19 @@
     return tex;
   }
 
-  function loadStickerTexture(def, isGold, cb) {
+  function getOrLoadStickerTexture(def, isGold, cb) {
+    const bank = isGold ? texturePool.gold : texturePool.normal;
+    if (bank[def.id]) {
+      cb(bank[def.id]);
+      return;
+    }
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = function () {
-      cb(drawStickerCanvas(img, isGold));
+      if (!window.THREE) return;
+      texturePool.normal[def.id] = drawStickerCanvas(img, false);
+      texturePool.gold[def.id] = drawStickerCanvas(img, true);
+      cb(bank[def.id]);
     };
     img.onerror = function () {
       if (def.fallbackFile && img.src.indexOf('FleischiQuestion') !== -1) {
@@ -317,7 +342,40 @@
     img.src = def.file;
   }
 
-  // --- GEOMETRY & FLOOR/CORRIDOR ENGINE ---
+  function initSharedResources() {
+    const THREE = window.THREE;
+    if (!THREE || sharedPlaneGeo) return;
+
+    sharedPlaneGeo = new THREE.PlaneGeometry(1.12, 1.12);
+    sharedOverlayGeo = new THREE.PlaneGeometry(1.15, 1.15);
+
+    // 1 einzelnes BufferGeometry für alle Glitzer-Partikel eines Stickers (1 Draw-Call statt 26!)
+    const pCount = 20;
+    const positions = new Float32Array(pCount * 3);
+    for (let i = 0; i < pCount; i++) {
+      const angle = (i / pCount) * Math.PI * 2;
+      const r = 0.55 + (i % 3) * 0.16;
+      positions[i * 3] = Math.cos(angle) * r;
+      positions[i * 3 + 1] = ((i % 5) - 2) * 0.22;
+      positions[i * 3 + 2] = Math.sin(angle) * r;
+    }
+    sharedParticleGeo = new THREE.BufferGeometry();
+    sharedParticleGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+    texturePool.glowWhite = createGlowTexture('rgba(255, 255, 255, 0.78)', 'rgba(180, 215, 255, 0.22)');
+    texturePool.glowGold = createGlowTexture('rgba(255, 225, 50, 0.95)', 'rgba(255, 165, 0, 0.45)');
+    texturePool.rays = createRaysTexture();
+    texturePool.particleDot = createGlowTexture('rgba(255, 255, 255, 1.0)', 'rgba(255, 240, 150, 0.5)');
+
+    // Alle 8 Sticker-Texturen gestaffelt im Hintergrund vorladen
+    STICKER_DEFS.forEach((def, idx) => {
+      setTimeout(() => {
+        getOrLoadStickerTexture(def, false, () => {});
+      }, idx * 45);
+    });
+  }
+
+  // --- FAST GEOMETRY & FLOOR ENGINE (OHNE RAYCAST-FREEZE) ---
   function extractScene(inst) {
     if (currentScene && currentScene.isScene) return currentScene;
     if (inst) {
@@ -339,128 +397,21 @@
     return currentCamera;
   }
 
-  function getCollidableMeshes(scene) {
-    const list = [];
-    if (!scene) return list;
-    scene.traverse(o => {
-      if (o.isMesh && o.visible && !o.userData?.isStickerPart) {
-        list.push(o);
-      }
-    });
-    return list;
-  }
-
-  function raycastFloorStrict(meshes, x, startY, z, maxDist) {
-    const THREE = window.THREE;
-    const ray = new THREE.Raycaster(
-      new THREE.Vector3(x, startY, z),
-      new THREE.Vector3(0, -1, 0),
-      0.02,
-      maxDist || 6.0
-    );
-    const hits = ray.intersectObjects(meshes, false);
-    if (hits.length > 0) {
-      return hits[0].point.y;
-    }
-    return null;
-  }
-
-  function centerInCorridor(meshes, x, y, z) {
-    const THREE = window.THREE;
-    const origin = new THREE.Vector3(x, y, z);
-
-    const rayPosX = new THREE.Raycaster(origin, new THREE.Vector3(1, 0, 0), 0.02, 4.5).intersectObjects(meshes, false);
-    const rayNegX = new THREE.Raycaster(origin, new THREE.Vector3(-1, 0, 0), 0.02, 4.5).intersectObjects(meshes, false);
-    let cx = x;
-    if (rayPosX.length > 0 && rayNegX.length > 0) {
-      const dPos = rayPosX[0].distance;
-      const dNeg = rayNegX[0].distance;
-      if (dPos + dNeg >= 1.2 && dPos + dNeg <= 7.0) {
-        cx = x + (dPos - dNeg) * 0.45;
-      }
-    } else if (rayPosX.length > 0 && rayPosX[0].distance < 0.8) {
-      cx = x - (0.85 - rayPosX[0].distance);
-    } else if (rayNegX.length > 0 && rayNegX[0].distance < 0.8) {
-      cx = x + (0.85 - rayNegX[0].distance);
-    }
-
-    const origin2 = new THREE.Vector3(cx, y, z);
-    const rayPosZ = new THREE.Raycaster(origin2, new THREE.Vector3(0, 0, 1), 0.02, 4.5).intersectObjects(meshes, false);
-    const rayNegZ = new THREE.Raycaster(origin2, new THREE.Vector3(0, 0, -1), 0.02, 4.5).intersectObjects(meshes, false);
-    let cz = z;
-    if (rayPosZ.length > 0 && rayNegZ.length > 0) {
-      const dPos = rayPosZ[0].distance;
-      const dNeg = rayNegZ[0].distance;
-      if (dPos + dNeg >= 1.2 && dPos + dNeg <= 7.0) {
-        cz = z + (dPos - dNeg) * 0.45;
-      }
-    } else if (rayPosZ.length > 0 && rayPosZ[0].distance < 0.8) {
-      cz = z - (0.85 - rayPosZ[0].distance);
-    } else if (rayNegZ.length > 0 && rayNegZ[0].distance < 0.8) {
-      cz = z + (0.85 - rayNegZ[0].distance);
-    }
-
-    return { x: cx, y, z: cz };
-  }
-
-  function isInsideLevelAndOpen(meshes, obstacles, x, refEyeY, z) {
-    const THREE = window.THREE;
-    const floorY = raycastFloorStrict(meshes, x, refEyeY - 0.1, z, 4.5);
-    if (floorY === null) return null;
-
-    const testY = floorY + STICKER_HEIGHT_OFFSET;
-
-    for (let i = 0; i < obstacles.length; i++) {
-      const ob = obstacles[i];
-      if (
-        x >= ob.min.x - 0.55 && x <= ob.max.x + 0.55 &&
-        z >= ob.min.z - 0.55 && z <= ob.max.z + 0.55 &&
-        testY >= ob.min.y - 0.15 && testY <= ob.max.y + 0.15
-      ) {
-        return null;
-      }
-    }
-
-    const pt = new THREE.Vector3(x, testY, z);
-    const dirs4 = [
-      new THREE.Vector3(1, 0, 0),
-      new THREE.Vector3(-1, 0, 0),
-      new THREE.Vector3(0, 0, 1),
-      new THREE.Vector3(0, 0, -1)
-    ];
-
-    let wallsSeen = 0;
-    for (let d = 0; d < dirs4.length; d++) {
-      const hits = new THREE.Raycaster(pt, dirs4[d], 0.02, 40.0).intersectObjects(meshes, false);
-      if (hits.length > 0) {
-        wallsSeen++;
-        if (hits[0].distance < 0.6) return null;
-      }
-    }
-
-    const upHits = new THREE.Raycaster(pt, new THREE.Vector3(0, 1, 0), 0.1, 18.0).intersectObjects(meshes, false);
-    if (wallsSeen < 2 && upHits.length === 0) return null;
-
-    const centered = centerInCorridor(meshes, x, testY, z);
-    const finalFloorY = raycastFloorStrict(meshes, centered.x, refEyeY - 0.1, centered.z, 4.5);
-    if (finalFloorY === null) return null;
-
-    return { x: centered.x, y: finalFloorY + STICKER_HEIGHT_OFFSET, z: centered.z };
-  }
-
-  function analyzeSceneGeometry(meshes, camPos) {
+  function analyzeSceneFast(scene, camPos) {
     const THREE = window.THREE;
     const obstacles = [];
     const walkableSurfaces = [];
     const potenzSigns = [];
-    const highTowerMeshes = [];
     const levelBox = new THREE.Box3();
     const towerBox = new THREE.Box3();
     const box = new THREE.Box3();
     const size = new THREE.Vector3();
     const center = new THREE.Vector3();
 
-    meshes.forEach(m => {
+    if (!scene) return { obstacles, walkableSurfaces, potenzSigns, towerBox, levelBox };
+
+    scene.traverse(m => {
+      if (!m.isMesh || !m.visible || m.userData?.isStickerPart) return;
       box.setFromObject(m);
       box.getSize(size);
       box.getCenter(center);
@@ -468,58 +419,107 @@
       if (size.x > 450 || size.z > 450 || (size.x < 0.18 && size.z < 0.18)) return;
       levelBox.union(box);
 
-      // Alle Meshes, die höher als 4.6m liegen, gehören im SchoolLevelManager garantiert zum 2er-Potenzen-Treppenturm!
       if (box.max.y > 4.6 && size.x < 40 && size.z < 40) {
         towerBox.union(box);
-        highTowerMeshes.push({
-          mesh: m,
-          x: center.x,
-          y: box.max.y,
-          centerY: center.y,
-          z: center.z,
-          sizeX: size.x,
-          sizeY: size.y,
-          sizeZ: size.z,
-          box: box.clone()
-        });
       }
 
-      // Prüfe ob dieses Mesh das markierte 2er-Potenzen-Schild oder Tür-Schild ist
       const mats = Array.isArray(m.material) ? m.material : [m.material];
-      mats.forEach(mat => {
+      for (let i = 0; i < mats.length; i++) {
+        const mat = mats[i];
         if (mat && mat.map && mat.map.image) {
           if (mat.map.image.__fnsPotenzSign || mat.map.image.__fnsPotenzDoor) {
             potenzSigns.push({
-              mesh: m,
               isMainSign: !!mat.map.image.__fnsPotenzSign,
-              center: center.clone(),
-              box: box.clone()
+              center: center.clone()
             });
           }
         }
-      });
+      }
 
       if (size.y <= 1.6 && size.x >= 0.7 && size.z >= 0.7) {
         walkableSurfaces.push({
-          mesh: m,
           x: center.x,
           y: box.max.y,
           z: center.z,
           sizeX: size.x,
-          sizeY: size.y,
           sizeZ: size.z,
-          box: box.clone()
+          minX: box.min.x,
+          maxX: box.max.x,
+          minZ: box.min.z,
+          maxZ: box.max.z
         });
       }
 
       if (size.y >= 1.2 && box.max.y >= camPos.y - 4.0) {
         if (size.x > 10 && size.z > 10 && box.containsPoint(camPos)) return;
-        obstacles.push(box.clone());
+        obstacles.push({
+          minX: box.min.x,
+          maxX: box.max.x,
+          minY: box.min.y,
+          maxY: box.max.y,
+          minZ: box.min.z,
+          maxZ: box.max.z
+        });
       }
     });
 
     cachedObstacleBoxes = obstacles;
-    return { obstacles, walkableSurfaces, potenzSigns, highTowerMeshes, towerBox, levelBox };
+    return { obstacles, walkableSurfaces, potenzSigns, towerBox, levelBox };
+  }
+
+  // Reine AABB-Mathematik (~0.01ms statt langsamer 3D-Mesh-Raycasts!)
+  function isSpotClearFast(obstacles, walkableSurfaces, levelBox, x, y, z, clearance) {
+    if (!levelBox.isEmpty()) {
+      if (x < levelBox.min.x + 1.5 || x > levelBox.max.x - 1.5 || z < levelBox.min.z + 1.5 || z > levelBox.max.z - 1.5) {
+        return false;
+      }
+    }
+    for (let i = 0; i < obstacles.length; i++) {
+      const ob = obstacles[i];
+      if (
+        x >= ob.minX - clearance && x <= ob.maxX + clearance &&
+        z >= ob.minZ - clearance && z <= ob.maxZ + clearance &&
+        y >= ob.minY - 0.3 && y <= ob.maxY + 0.3
+      ) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  function getFloorHeightFast(walkableSurfaces, x, refY, z, defaultFloorY) {
+    let bestY = null;
+    let bestDiff = 999;
+    for (let i = 0; i < walkableSurfaces.length; i++) {
+      const ws = walkableSurfaces[i];
+      if (x >= ws.minX - 0.3 && x <= ws.maxX + 0.3 && z >= ws.minZ - 0.3 && z <= ws.maxZ + 0.3) {
+        const diff = Math.abs(ws.y - defaultFloorY);
+        if (diff < bestDiff && ws.y <= refY + 0.6) {
+          bestDiff = diff;
+          bestY = ws.y;
+        }
+      }
+    }
+    return bestY !== null ? bestY : defaultFloorY;
+  }
+
+  function findOpenSpotNearFast(obstacles, walkableSurfaces, levelBox, targetX, refEyeY, targetZ, defaultFloorY) {
+    const radii = [0, 1.2, 2.4, 3.8, 5.5, 7.5];
+    for (let r = 0; r < radii.length; r++) {
+      const rad = radii[r];
+      const steps = rad === 0 ? 1 : 8;
+      for (let s = 0; s < steps; s++) {
+        const ang = (s / steps) * Math.PI * 2;
+        const cx = targetX + Math.cos(ang) * rad;
+        const cz = targetZ + Math.sin(ang) * rad;
+        const fy = getFloorHeightFast(walkableSurfaces, cx, refEyeY, cz, defaultFloorY);
+        const testY = fy + STICKER_HEIGHT_OFFSET;
+        if (isSpotClearFast(obstacles, walkableSurfaces, levelBox, cx, testY, cz, 0.72)) {
+          return { x: cx, y: testY, z: cz };
+        }
+      }
+    }
+    return { x: targetX, y: defaultFloorY + STICKER_HEIGHT_OFFSET, z: targetZ };
   }
 
   function findMidRaftInBoilerLevel(inst, scene, camPos) {
@@ -580,8 +580,6 @@
 
   function computeLocationsForStrategy(strategy, inst, scene, cam) {
     const THREE = window.THREE;
-    const meshes = getCollidableMeshes(scene);
-
     const camPos = new THREE.Vector3(0, 1.6, 0);
     const camDir = new THREE.Vector3(0, 0, -1);
     if (cam) {
@@ -592,193 +590,94 @@
       else camDir.set(0, 0, -1);
     }
 
-    const { obstacles, walkableSurfaces, potenzSigns, highTowerMeshes, towerBox, levelBox } = analyzeSceneGeometry(meshes, camPos);
-    const startFloorY = raycastFloorStrict(meshes, camPos.x, camPos.y, camPos.z, 5.0) ?? (camPos.y - 1.55);
+    const { obstacles, walkableSurfaces, potenzSigns, towerBox, levelBox } = analyzeSceneFast(scene, camPos);
+    const defaultFloorY = camPos.y - 1.55;
+    const startFloorY = getFloorHeightFast(walkableSurfaces, camPos.x, camPos.y, camPos.z, defaultFloorY);
 
     // 1. DER GANG
     if (strategy === 'hallway_outside_room') {
-      const fwdHits = new THREE.Raycaster(new THREE.Vector3(camPos.x, camPos.y - 0.2, camPos.z), camDir, 0.2, 60.0).intersectObjects(meshes, false);
-      const maxClear = fwdHits.length > 0 ? fwdHits[0].distance : 22.0;
-      const dist = maxClear > 8.0 ? Math.min(15.0, maxClear * 0.6) : 11.0;
-      const pt = camPos.clone().addScaledVector(camDir, dist);
-      const fy = raycastFloorStrict(meshes, pt.x, camPos.y, pt.z, 5.0) ?? startFloorY;
-      return [{ x: pt.x, y: fy + STICKER_HEIGHT_OFFSET, z: pt.z }];
+      const pt = camPos.clone().addScaledVector(camDir, 12.5);
+      return [findOpenSpotNearFast(obstacles, walkableSurfaces, levelBox, pt.x, camPos.y, pt.z, startFloorY)];
     }
 
-    // 2. SCHOOL HALLWAY (Exakt mittig auf der Haupt-Schulgang-Achse!)
+    // 2. SCHOOL HALLWAY (Mittig im Gang)
     if (strategy === 'school_middle') {
-      const axes = [
-        camDir.clone(),
-        new THREE.Vector3(0, 0, -1),
-        new THREE.Vector3(0, 0, 1),
-        new THREE.Vector3(1, 0, 0),
-        new THREE.Vector3(-1, 0, 0)
-      ];
-      let bestAxis = camDir.clone();
-      let bestLen = 0;
-      axes.forEach(ax => {
-        ax.y = 0;
-        if (ax.lengthSq() < 0.01) return;
-        ax.normalize();
-        const hits = new THREE.Raycaster(new THREE.Vector3(camPos.x, camPos.y - 0.3, camPos.z), ax, 0.3, 100.0).intersectObjects(meshes, false);
-        const clearDist = hits.length > 0 ? hits[0].distance : 40.0;
-        if (clearDist > bestLen) {
-          bestLen = clearDist;
-          bestAxis = ax;
-        }
-      });
-
-      const d1 = Math.min(16.0, Math.max(8.0, bestLen * 0.48));
-      const p1 = camPos.clone().addScaledVector(bestAxis, d1);
-      const fy1 = raycastFloorStrict(meshes, p1.x, camPos.y, p1.z, 5.0) ?? startFloorY;
-      return [{ x: p1.x, y: fy1 + STICKER_HEIGHT_OFFSET, z: p1.z }];
+      const p1 = camPos.clone().addScaledVector(camDir, 14.5);
+      return [findOpenSpotNearFast(obstacles, walkableSurfaces, levelBox, p1.x, camPos.y, p1.z, startFloorY)];
     }
 
-    // 3. TREPPENHAUS DER 2ER-POTENZEN (In SchoolLevelManager.js: Findet den Treppenturm & das "GESUCHTER AUSGANG"-Schild!)
+    // 3. TREPPENHAUS DER 2ER-POTENZEN
     if (strategy === 'staircase_landing') {
       const spots = [];
 
-      // Methode A: Anhand des 3D-Schilds ("GESUCHTER AUSGANG" / "FOLGE:") im Treppenhaus
-      const mainSigns = potenzSigns.filter(s => s.isMainSign);
-      const doorSigns = potenzSigns.filter(s => !s.isMainSign);
-
-      mainSigns.forEach(sign => {
-        // Prüfe in 4 Richtungen um das Schild (2.2m Abstand), wo der freie Raum vor der Treppe ist
-        const testOffsets = [
-          { dx: 2.2, dz: 0 },
-          { dx: -2.2, dz: 0 },
-          { dx: 0, dz: 2.2 },
-          { dx: 0, dz: -2.2 }
-        ];
-        testOffsets.forEach(off => {
-          const tx = sign.center.x + off.dx;
-          const tz = sign.center.z + off.dz;
-          const fy = raycastFloorStrict(meshes, tx, sign.center.y + 1.2, tz, 4.5);
-          if (fy !== null) {
-            const c = centerInCorridor(meshes, tx, fy + 0.85, tz);
-            spots.push({ x: c.x, y: fy + 0.85, z: c.z });
-          }
+      potenzSigns.forEach(sign => {
+        if (spots.length >= 6) return;
+        spots.push({
+          x: sign.center.x,
+          y: sign.center.y - 0.15,
+          z: sign.center.z
         });
       });
 
-      // Methode B: Direkt auf den Treppen-Podesten im 2er-Potenzen-Treppenturm (towerBox = alle Meshes mit y > 4.6m)
       if (!towerBox.isEmpty()) {
-        const towerCenter = new THREE.Vector3();
-        towerBox.getCenter(towerCenter);
-
-        // Suche alle begehbaren Stufen/Podeste innerhalb der (X, Z)-Grundfläche des Treppenturms
         const towerSurfaces = walkableSurfaces.filter(ws =>
           ws.x >= towerBox.min.x - 2.0 && ws.x <= towerBox.max.x + 2.0 &&
           ws.z >= towerBox.min.z - 2.0 && ws.z <= towerBox.max.z + 2.0 &&
           ws.sizeX <= 12.0 && ws.sizeZ <= 12.0
         );
         towerSurfaces.sort((a, b) => a.y - b.y);
-
         towerSurfaces.forEach(ts => {
-          if (spots.length >= 8) return;
+          if (spots.length >= 7) return;
           const sp = { x: ts.x, y: ts.y + 0.85, z: ts.z };
-          if (!spots.some(ex => Math.hypot(ex.x - sp.x, ex.z - sp.z) < 2.0 && Math.abs(ex.y - sp.y) < 1.8)) {
+          if (!spots.some(ex => Math.hypot(ex.x - sp.x, ex.z - sp.z) < 2.2 && Math.abs(ex.y - sp.y) < 1.8)) {
             spots.push(sp);
           }
         });
-
-        // Zusätzlich im Zentrum und an den 4 Quadranten des Treppenturms auf Etagenhöhe (y = 1.2m, 3.8m, 6.8m) raycasten
-        const samplePts = [
-          { x: towerCenter.x, z: towerCenter.z },
-          { x: towerCenter.x + 2.2, z: towerCenter.z + 2.2 },
-          { x: towerCenter.x - 2.2, z: towerCenter.z + 2.2 },
-          { x: towerCenter.x + 2.2, z: towerCenter.z - 2.2 },
-          { x: towerCenter.x - 2.2, z: towerCenter.z - 2.2 }
-        ];
-        [startFloorY + 2.2, startFloorY + 4.8, startFloorY + 7.5].forEach(testY => {
-          samplePts.forEach(pt => {
-            if (spots.length >= 10) return;
-            const fy = raycastFloorStrict(meshes, pt.x, testY, pt.z, 3.2);
-            if (fy !== null && fy >= startFloorY - 0.2) {
-              const sp = { x: pt.x, y: fy + 0.85, z: pt.z };
-              if (!spots.some(ex => Math.hypot(ex.x - sp.x, ex.z - sp.z) < 2.2 && Math.abs(ex.y - sp.y) < 1.8)) {
-                spots.push(sp);
-              }
-            }
-          });
-        });
       }
 
-      // Methode C: Vor den 2er-Potenz-Türen (2^1, 2^2, 2^3...)
-      doorSigns.slice(0, 4).forEach(ds => {
-        const c = centerInCorridor(meshes, ds.center.x, ds.center.y - 0.3, ds.center.z);
-        spots.push({ x: c.x, y: ds.center.y - 0.3, z: c.z });
-      });
-
+      if (spots.length === 0) {
+        const pFront = camPos.clone().addScaledVector(camDir, 2.5);
+        spots.push({ x: pFront.x, y: camPos.y - 0.2, z: pFront.z });
+      }
       return spots;
     }
 
-    // 4. MEGA LABYRINTH (Mind. 20m vom Spawn entfernt, auf allen Etagen/Ecken in echten Gängen)
+    // 4. MEGA LABYRINTH (Schnelles AABB-Sampling ohne Raycast-Stall, mind. 20m vom Spawn!)
     if (strategy === 'labyrinth_open_corners') {
-      const validCorridorSpots = [];
-
+      const candidates = [];
       if (!levelBox.isEmpty()) {
-        const minX = levelBox.min.x + 2.0;
-        const maxX = levelBox.max.x - 2.0;
-        const minZ = levelBox.min.z + 2.0;
-        const maxZ = levelBox.max.z - 2.0;
-        const spanX = Math.max(10, maxX - minX);
-        const spanZ = Math.max(10, maxZ - minZ);
-        const stepX = Math.max(3.0, spanX / 13);
-        const stepZ = Math.max(3.0, spanZ / 13);
+        const minX = levelBox.min.x + 2.5;
+        const maxX = levelBox.max.x - 2.5;
+        const minZ = levelBox.min.z + 2.5;
+        const maxZ = levelBox.max.z - 2.5;
+        const stepX = Math.max(3.5, (maxX - minX) / 12);
+        const stepZ = Math.max(3.5, (maxZ - minZ) / 12);
 
-        const testEyeHeights = [camPos.y, camPos.y - 3.2, camPos.y + 3.2, camPos.y - 6.4];
-
-        for (let hIdx = 0; hIdx < testEyeHeights.length; hIdx++) {
-          const testEyeY = testEyeHeights[hIdx];
-          if (testEyeY < levelBox.min.y || testEyeY > levelBox.max.y + 2.0) continue;
-
-          for (let x = minX; x <= maxX; x += stepX) {
-            for (let z = minZ; z <= maxZ; z += stepZ) {
-              if (Math.hypot(x - camPos.x, z - camPos.z) < 20.0) continue;
-              const openSpot = isInsideLevelAndOpen(meshes, obstacles, x, testEyeY, z);
-              if (openSpot && Math.hypot(openSpot.x - camPos.x, openSpot.z - camPos.z) >= 19.5) {
-                validCorridorSpots.push(openSpot);
-              }
+        for (let x = minX; x <= maxX; x += stepX) {
+          for (let z = minZ; z <= maxZ; z += stepZ) {
+            if (Math.hypot(x - camPos.x, z - camPos.z) < 20.0) continue;
+            const fy = getFloorHeightFast(walkableSurfaces, x, camPos.y, z, startFloorY);
+            const testY = fy + STICKER_HEIGHT_OFFSET;
+            if (isSpotClearFast(obstacles, walkableSurfaces, levelBox, x, testY, z, 0.8)) {
+              candidates.push({ x, y: testY, z });
             }
           }
         }
       }
-
-      walkableSurfaces.forEach(ws => {
-        if (Math.hypot(ws.x - camPos.x, ws.z - camPos.z) >= 20.0) {
-          const openSpot = isInsideLevelAndOpen(meshes, obstacles, ws.x, ws.y + 1.4, ws.z);
-          if (openSpot) validCorridorSpots.push(openSpot);
-        }
-      });
 
       const chosen = [];
-      if (validCorridorSpots.length > 0) {
-        validCorridorSpots.sort((a, b) =>
+      if (candidates.length > 0) {
+        candidates.sort((a, b) =>
           Math.hypot(b.x - camPos.x, b.z - camPos.z) - Math.hypot(a.x - camPos.x, a.z - camPos.z)
         );
-        chosen.push(validCorridorSpots[0]);
-
-        while (chosen.length < 7) {
-          let bestCandidate = null;
-          let bestMinDist = -1;
-          for (let i = 0; i < validCorridorSpots.length; i++) {
-            const cand = validCorridorSpots[i];
-            let minDistToChosen = Infinity;
-            for (let j = 0; j < chosen.length; j++) {
-              const d = Math.hypot(cand.x - chosen[j].x, cand.z - chosen[j].z) + Math.abs(cand.y - chosen[j].y) * 2.0;
-              if (d < minDistToChosen) minDistToChosen = d;
-            }
-            if (minDistToChosen > bestMinDist && minDistToChosen >= 12.0) {
-              bestMinDist = minDistToChosen;
-              bestCandidate = cand;
-            }
+        chosen.push(candidates[0]);
+        for (let i = 1; i < candidates.length && chosen.length < 6; i++) {
+          const c = candidates[i];
+          if (!chosen.some(ex => Math.hypot(ex.x - c.x, ex.z - c.z) < 16.0)) {
+            chosen.push(c);
           }
-          if (!bestCandidate) break;
-          chosen.push(bestCandidate);
         }
       }
-
       return chosen;
     }
 
@@ -796,10 +695,12 @@
         for (let x = minX; x <= maxX; x += stepX) {
           for (let z = minZ; z <= maxZ; z += stepZ) {
             if (Math.hypot(x - camPos.x, z - camPos.z) < 16.0) continue;
-            const sp = isInsideLevelAndOpen(meshes, obstacles, x, camPos.y, z);
-            if (sp && !chosen.some(c => Math.hypot(c.x - sp.x, c.z - sp.z) < 22.0)) {
-              chosen.push(sp);
-              if (chosen.length >= 5) return chosen;
+            const testY = startFloorY + STICKER_HEIGHT_OFFSET;
+            if (isSpotClearFast(obstacles, walkableSurfaces, levelBox, x, testY, z, 0.85)) {
+              if (!chosen.some(c => Math.hypot(c.x - x, c.z - z) < 22.0)) {
+                chosen.push({ x, y: testY, z });
+                if (chosen.length >= 5) return chosen;
+              }
             }
           }
         }
@@ -815,17 +716,16 @@
         const maxX = levelBox.max.x - 2.5;
         const minZ = levelBox.min.z + 2.5;
         const maxZ = levelBox.max.z - 2.5;
-        const stepX = Math.max(3.0, (maxX - minX) / 8);
-        const stepZ = Math.max(3.0, (maxZ - minZ) / 8);
+        const stepX = Math.max(3.0, (maxX - minX) / 9);
+        const stepZ = Math.max(3.0, (maxZ - minZ) / 9);
 
         for (let x = minX; x <= maxX; x += stepX) {
           for (let z = minZ; z <= maxZ; z += stepZ) {
             if (Math.hypot(x - camPos.x, z - camPos.z) < 9.0) continue;
-            const sp = isInsideLevelAndOpen(meshes, obstacles, x, camPos.y, z);
-            if (sp) {
-              sp.y = startFloorY + STICKER_HEIGHT_OFFSET;
-              if (!chosen.some(c => Math.hypot(c.x - sp.x, c.z - sp.z) < 12.0)) {
-                chosen.push(sp);
+            const testY = startFloorY + STICKER_HEIGHT_OFFSET;
+            if (isSpotClearFast(obstacles, walkableSurfaces, levelBox, x, testY, z, 0.78)) {
+              if (!chosen.some(c => Math.hypot(c.x - x, c.z - z) < 12.0)) {
+                chosen.push({ x, y: testY, z });
                 if (chosen.length >= 3) return chosen;
               }
             }
@@ -833,7 +733,7 @@
         }
       }
       const p = camPos.clone().addScaledVector(camDir, 10.5);
-      return [{ x: p.x, y: startFloorY + STICKER_HEIGHT_OFFSET, z: p.z }];
+      return [findOpenSpotNearFast(obstacles, walkableSurfaces, levelBox, p.x, camPos.y, p.z, startFloorY)];
     }
 
     // 7. GEHEIMER 8. STICKER
@@ -843,15 +743,17 @@
         const maxX = levelBox.max.x - 3.0;
         const minZ = levelBox.min.z + 3.0;
         const maxZ = levelBox.max.z - 3.0;
-        const stepX = Math.max(4.0, (maxX - minX) / 8);
-        const stepZ = Math.max(4.0, (maxZ - minZ) / 8);
+        const stepX = Math.max(4.5, (maxX - minX) / 8);
+        const stepZ = Math.max(4.5, (maxZ - minZ) / 8);
 
         for (let x = maxX; x >= minX; x -= stepX) {
           for (let z = maxZ; z >= minZ; z -= stepZ) {
             if (Math.hypot(x - camPos.x, z - camPos.z) < 25.0) continue;
-            const sp = isInsideLevelAndOpen(meshes, obstacles, x, camPos.y, z);
-            if (sp && !activeSpawns.some(a => a && a.group && Math.hypot(a.group.position.x - sp.x, a.group.position.z - sp.z) < 18.0)) {
-              return [sp];
+            const testY = startFloorY + STICKER_HEIGHT_OFFSET;
+            if (isSpotClearFast(obstacles, walkableSurfaces, levelBox, x, testY, z, 0.8)) {
+              if (!activeSpawns.some(a => a && a.group && Math.hypot(a.group.position.x - x, a.group.position.z - z) < 18.0)) {
+                return [{ x, y: testY, z }];
+              }
             }
           }
         }
@@ -862,10 +764,11 @@
     return [];
   }
 
-  // --- CREATE 3D STICKER MESH ---
+  // --- CREATE 3D STICKER MESH (ZERO POINTLIGHT = KEIN SHADER-STALL BEIM SPAWNEN/ENTFERNEN!) ---
   function createStickerInstance(scene, def, isGold, pos, raftData) {
     const THREE = window.THREE;
     if (!THREE || !scene) return;
+    initSharedResources();
 
     const group = new THREE.Group();
     group.userData.isStickerPart = true;
@@ -883,19 +786,18 @@
       return;
     }
 
-    const geo = new THREE.PlaneGeometry(1.12, 1.12);
     const mat = new THREE.MeshBasicMaterial({
       color: isGold ? 0xffe680 : 0xffffff,
       side: THREE.FrontSide,
       transparent: true
     });
 
-    const frontMesh = new THREE.Mesh(geo, mat);
+    const frontMesh = new THREE.Mesh(sharedPlaneGeo, mat);
     frontMesh.position.z = 0.003;
     frontMesh.userData.isStickerPart = true;
     group.add(frontMesh);
 
-    const backMesh = new THREE.Mesh(geo, mat);
+    const backMesh = new THREE.Mesh(sharedPlaneGeo, mat);
     backMesh.rotation.y = Math.PI;
     backMesh.position.z = -0.003;
     backMesh.userData.isStickerPart = true;
@@ -909,28 +811,24 @@
       blending: THREE.AdditiveBlending,
       depthWrite: false
     });
-    const whiteMesh = new THREE.Mesh(new THREE.PlaneGeometry(1.15, 1.15), whiteOverlayMat);
+    const whiteMesh = new THREE.Mesh(sharedOverlayGeo, whiteOverlayMat);
     whiteMesh.userData.isStickerPart = true;
     group.add(whiteMesh);
 
-    const glowTex = isGold
-      ? createGlowTexture('rgba(255, 220, 40, 0.95)', 'rgba(255, 165, 0, 0.45)')
-      : createGlowTexture('rgba(255, 255, 255, 0.72)', 'rgba(180, 210, 255, 0.18)');
     const glowMat = new THREE.SpriteMaterial({
-      map: glowTex,
+      map: isGold ? texturePool.glowGold : texturePool.glowWhite,
       transparent: true,
-      opacity: isGold ? 0.9 : 0.42,
+      opacity: isGold ? 0.92 : 0.48,
       blending: THREE.AdditiveBlending,
       depthWrite: false
     });
     const glowSprite = new THREE.Sprite(glowMat);
-    glowSprite.scale.set(2.2, 2.2, 1);
+    glowSprite.scale.set(2.3, 2.3, 1);
     glowSprite.userData.isStickerPart = true;
     group.add(glowSprite);
 
-    const raysTex = createRaysTexture();
     const raysMat1 = new THREE.SpriteMaterial({
-      map: raysTex,
+      map: texturePool.rays,
       transparent: true,
       opacity: isGold ? 0.45 : 0.0,
       color: isGold ? 0xffd700 : 0xffffff,
@@ -943,7 +841,7 @@
     group.add(raysSprite1);
 
     const raysMat2 = new THREE.SpriteMaterial({
-      map: raysTex,
+      map: texturePool.rays,
       transparent: true,
       opacity: 0.0,
       blending: THREE.AdditiveBlending,
@@ -954,32 +852,21 @@
     raysSprite2.userData.isStickerPart = true;
     group.add(raysSprite2);
 
-    const particles = [];
-    const pGeo = new THREE.PlaneGeometry(0.09, 0.09);
-    for (let i = 0; i < 26; i++) {
-      const pMat = new THREE.MeshBasicMaterial({
-        color: isGold ? 0xffd700 : 0xffffff,
-        side: THREE.DoubleSide,
-        transparent: true,
-        opacity: isGold ? 0.85 : 0.0,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false
-      });
-      const pMesh = new THREE.Mesh(pGeo, pMat);
-      pMesh.userData.isStickerPart = true;
-      const angle = (i / 26) * Math.PI * 2;
-      const radius = 0.5 + Math.random() * 0.5;
-      const heightOffset = (Math.random() - 0.5) * 1.0;
-      pMesh.position.set(Math.cos(angle) * radius, heightOffset, Math.sin(angle) * radius);
-      group.add(pMesh);
-      particles.push({ mesh: pMesh, mat: pMat, angle, radius, heightOffset, speed: 1.6 + Math.random() * 2.2 });
-    }
+    // 1 einziges THREE.Points-Objekt für alle Glitzer-Partikel (extrem schnell!)
+    const pointsMat = new THREE.PointsMaterial({
+      map: texturePool.particleDot,
+      color: isGold ? 0xffd700 : 0xffffff,
+      size: 0.22,
+      transparent: true,
+      opacity: isGold ? 0.88 : 0.0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+    const pointsRing = new THREE.Points(sharedParticleGeo, pointsMat);
+    pointsRing.userData.isStickerPart = true;
+    group.add(pointsRing);
 
-    const light = new THREE.PointLight(isGold ? 0xffc400 : 0xffffff, isGold ? 2.2 : 0.85, 6.5);
-    light.userData.isStickerPart = true;
-    group.add(light);
-
-    loadStickerTexture(def, isGold, tex => {
+    getOrLoadStickerTexture(def, isGold, tex => {
       mat.map = tex;
       mat.needsUpdate = true;
     });
@@ -997,8 +884,8 @@
       raysMat1,
       raysSprite2,
       raysMat2,
-      particles,
-      light,
+      pointsRing,
+      pointsMat,
       baseY: group.position.y,
       raftObj,
       collecting: false,
@@ -1011,8 +898,9 @@
     for (let i = activeSpawns.length - 1; i >= 0; i--) {
       const s = activeSpawns[i];
       if (!s || (defId && s.def && s.def.id === defId) || !defId) {
-        if (s && s.group && s.group.parent) {
-          s.group.parent.remove(s.group);
+        if (s && s.group) {
+          s.group.visible = false;
+          if (s.group.parent) s.group.parent.remove(s.group);
         }
         activeSpawns.splice(i, 1);
       }
@@ -1073,13 +961,6 @@
     const cam = extractCamera(inst);
     if (!scene || !window.THREE) return;
 
-    const meshes = getCollidableMeshes(scene);
-    if (meshes.length < 2) {
-      clearTimeout(spawnTimeout);
-      spawnTimeout = setTimeout(() => spawnForActiveLevel(levelKey, inst), 300);
-      return;
-    }
-
     clearActiveSpawns();
 
     if (cam) {
@@ -1088,7 +969,6 @@
     }
     levelLoadTimestamp = performance.now();
 
-    // WICHTIG: SchoolLevelManager enthält SOWOHL den School Hallway ALS AUCH das 2er-Potenzen-Treppenhaus!
     if (levelKey === 'school_hallway' || levelKey === 'potenz_treppenhaus') {
       const schoolDef = STICKER_DEFS.find(d => d.id === 'school_hallway');
       const stairDef = STICKER_DEFS.find(d => d.id === 'potenz_treppenhaus');
@@ -1102,7 +982,6 @@
       saveState.levelsSeen[levelKey] = (saveState.levelsSeen[levelKey] || 0) + 1;
     }
 
-    // 8. Sticker (ab 2. Durchlauf, außer im Mega Labyrinth)
     const secretDef = STICKER_DEFS.find(d => d.isEighthSticker);
     if (secretDef && isSecondPlaythrough(levelKey) && levelKey !== 'mega_labyrinth') {
       spawnSingleStickerDef(secretDef, scene, cam, inst);
@@ -1125,10 +1004,10 @@
     clearTimeout(spawnTimeout);
     spawnTimeout = setTimeout(() => {
       spawnForActiveLevel(checkKey, activeLevelInstance);
-    }, 350);
+    }, 250);
   }
 
-  // --- COLLECT & LEGO ANIMATION ---
+  // --- COLLECT & LEGO ANIMATION (OHNE FRAME-DROP) ---
   function triggerCollect(targetSpawn) {
     if (!targetSpawn || targetSpawn.collecting) return;
     targetSpawn.collecting = true;
@@ -1146,7 +1025,7 @@
     }
     writeSave();
 
-    // Nur die anderen Kopien DESSELBEN Stickers entfernen (lässt den Treppenhaus-Sticker im SchoolLevel unberührt!)
+    // Andere Kopien sofort unsichtbar schalten (0ms GPU-Cost!) und aus dem Array nehmen
     for (let i = activeSpawns.length - 1; i >= 0; i--) {
       const other = activeSpawns[i];
       if (!other) {
@@ -1154,9 +1033,7 @@
         continue;
       }
       if (other !== targetSpawn && other.def && other.def.id === def.id) {
-        if (other.group && other.group.parent) {
-          other.group.parent.remove(other.group);
-        }
+        if (other.group) other.group.visible = false;
         activeSpawns.splice(i, 1);
       }
     }
@@ -1166,10 +1043,14 @@
     updateStickerMenuUI();
   }
 
-  // --- LIVE-KARTE / MINIMAP ---
+  // --- GEDROSSELTE LIVE-KARTE / MINIMAP (15 FPS statt 60 FPS spart CPU!) ---
+  let lastMapRenderTime = 0;
   function updateMinimapDisplay(playerPos, camDir, now) {
+    if (now - lastMapRenderTime < 65) return;
+    lastMapRenderTime = now;
+
     let mapBox = document.getElementById('fns-radar-map-box');
-    const mapRelevantSpawns = activeSpawns.filter(s => s && s.group && !s.collecting && s.def && s.def.showOnMap);
+    const mapRelevantSpawns = activeSpawns.filter(s => s && s.group && s.group.visible && !s.collecting && s.def && s.def.showOnMap);
     const shouldShowMap = mapRelevantSpawns.length > 0 && !isMainMenuVisible();
 
     if (!shouldShowMap || !playerPos) {
@@ -1199,24 +1080,16 @@
     const scale = 2.1;
 
     ctx.clearRect(0, 0, W, H);
-
     ctx.fillStyle = 'rgba(6, 6, 8, 0.9)';
     ctx.fillRect(0, 0, W, H);
-
-    ctx.strokeStyle = 'rgba(158, 42, 28, 0.22)';
-    ctx.lineWidth = 1;
-    for (let g = 23; g < W; g += 23) {
-      ctx.beginPath(); ctx.moveTo(g, 0); ctx.lineTo(g, H); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(0, g); ctx.lineTo(W, g); ctx.stroke();
-    }
 
     ctx.fillStyle = 'rgba(158, 42, 28, 0.55)';
     for (let i = 0; i < cachedObstacleBoxes.length; i++) {
       const b = cachedObstacleBoxes[i];
-      const rx = cx + (b.min.x - playerPos.x) * scale;
-      const ry = cy + (b.min.z - playerPos.z) * scale;
-      const rw = Math.max(2, (b.max.x - b.min.x) * scale);
-      const rh = Math.max(2, (b.max.z - b.min.z) * scale);
+      const rx = cx + (b.minX - playerPos.x) * scale;
+      const ry = cy + (b.minZ - playerPos.z) * scale;
+      const rw = Math.max(2, (b.maxX - b.minX) * scale);
+      const rh = Math.max(2, (b.maxZ - b.minZ) * scale);
       if (rx + rw >= 0 && rx <= W && ry + rh >= 0 && ry <= H) {
         ctx.fillRect(rx, ry, rw, rh);
       }
@@ -1283,8 +1156,6 @@
     ctx.restore();
   }
 
-  // Dynamischer Treppenhaus-Prüfer: Wenn der Spieler im SchoolLevel die Treppe betritt (oder "SCHIEBETÜR VERRIEGELT" erscheint),
-  // stellt er sicher, dass direkt auf der Treppe vor dem Spieler ein Exemplar von LogikRuftAn.webp liegt!
   let dynamicStairPlaced = false;
   function checkDynamicStairwellProximity(playerPos, camDir, scene) {
     if (!playerPos || !camDir || !scene) return;
@@ -1295,7 +1166,6 @@
     const mode = decideSpawnMode(stairDef, 'potenz_treppenhaus');
     if (!mode) return;
 
-    // Wenn der Spieler auf der Treppe nach oben geht (playerPos.y > 2.2) oder die Schiebetür-Meldung aktiv ist:
     const bodyText = (document.body.innerText || '').toUpperCase();
     const isNearStairwell = (playerPos.y > 2.2) || bodyText.includes('SCHIEBETÜR VERRIEGELT') || bodyText.includes('FINDE DIE TÜR FÜR 2');
 
@@ -1352,7 +1222,7 @@
       }
     }
 
-    if (now - lastHudCheck > 450) {
+    if (now - lastHudCheck > 500) {
       lastHudCheck = now;
       syncStickerMenuVisibility();
       checkDynamicStairwellProximity(playerPos, camDir, scene);
@@ -1371,7 +1241,7 @@
 
     for (let i = activeSpawns.length - 1; i >= 0; i--) {
       const s = activeSpawns[i];
-      if (!s || !s.group) continue;
+      if (!s || !s.group || !s.group.visible) continue;
 
       if (scene && !s.collecting && s.group.parent !== scene) {
         scene.add(s.group);
@@ -1392,14 +1262,9 @@
           s.group.position.y = s.baseY + Math.sin(now * 0.003) * 0.09;
         }
 
-        if (s.isGold) {
+        if (s.isGold && s.pointsRing) {
           s.raysMat1.rotation += dt * 0.9;
-          s.particles.forEach(p => {
-            p.angle += dt * p.speed;
-            p.mesh.position.x = Math.cos(p.angle) * p.radius;
-            p.mesh.position.z = Math.sin(p.angle) * p.radius;
-            p.mesh.rotation.y += dt * 4.0;
-          });
+          s.pointsRing.rotation.y += dt * 2.2;
         }
 
         if (playerPos) {
@@ -1413,6 +1278,7 @@
           }
         }
       } else {
+        // LEGO HARRY POTTER GOLDEN BRICK ANIMATION (60 FPS ohne Licht-Stall!)
         s.collectTime += dt;
         const t = s.collectTime;
         const duration = 1.65;
@@ -1423,8 +1289,8 @@
 
         const glowP = Math.min(1.0, t / 1.25);
         s.whiteOverlayMat.opacity = Math.pow(glowP, 1.35) * 0.96;
-        s.glowMat.opacity = 0.9 + glowP * 0.1;
-        const haloScale = 2.2 + glowP * 3.4;
+        s.glowMat.opacity = 0.92 + glowP * 0.08;
+        const haloScale = 2.3 + glowP * 4.2;
         s.glowSprite.scale.set(haloScale, haloScale, 1);
 
         const rayAlpha = Math.sin(Math.min(1.0, t / duration) * Math.PI);
@@ -1432,25 +1298,17 @@
         s.raysMat2.opacity = rayAlpha * 0.85;
         s.raysMat1.rotation += dt * 3.6;
         s.raysMat2.rotation -= dt * 2.9;
-        const rayScale = 2.6 + glowP * 2.9;
+        const rayScale = 2.6 + glowP * 3.2;
         s.raysSprite1.scale.set(rayScale, rayScale, 1);
         s.raysSprite2.scale.set(rayScale * 1.15, rayScale * 1.15, 1);
 
-        s.light.color.setHex(0xffffff);
-        s.light.intensity = 2.5 + glowP * 8.0;
-        s.light.distance = 8.0 + glowP * 9.0;
-
-        s.particles.forEach(p => {
-          p.mat.color.setHex(0xffffff);
-          p.mat.opacity = rayAlpha;
-          p.angle += dt * (p.speed * 4.5);
-          const rad = p.radius * (1.0 + glowP * 1.6);
-          p.mesh.position.x = Math.cos(p.angle) * rad;
-          p.mesh.position.z = Math.sin(p.angle) * rad;
-          p.mesh.position.y = p.heightOffset + Math.sin(t * 10.0 + p.angle) * 0.22;
-          p.mesh.rotation.x += dt * 8.0;
-          p.mesh.rotation.y += dt * 8.0;
-        });
+        if (s.pointsRing && s.pointsMat) {
+          s.pointsMat.color.setHex(0xffffff);
+          s.pointsMat.opacity = rayAlpha;
+          s.pointsRing.rotation.y += dt * 8.5;
+          const pScale = 1.0 + glowP * 1.6;
+          s.pointsRing.scale.set(pScale, 1.0 + glowP * 0.5, pScale);
+        }
 
         if (t > 1.25) {
           const shrink = Math.max(0.001, 1.18 * (1.0 - (t - 1.25) / (duration - 1.25)));
@@ -1461,7 +1319,7 @@
         }
 
         if (t >= duration) {
-          if (s.group.parent) s.group.parent.remove(s.group);
+          s.group.visible = false;
           activeSpawns.splice(i, 1);
         }
       }
@@ -1795,6 +1653,7 @@
 
       const card = document.createElement('div');
       card.className = `fns-sticker-card ${unlocked ? 'unlocked' : 'locked'} ${hasGold ? 'gold-unlocked' : ''}`;
+      card.tabIndex = 0;
       card.innerHTML = `
         <span class="fns-card-index">#0${idx + 1}</span>
         ${hasGold ? '<div class="fns-gold-badge" title="Gold-Filter umschalten">★ GOLD</div>' : ''}
@@ -1815,11 +1674,16 @@
 
       if (hasGold) {
         const badge = card.querySelector('.fns-gold-badge');
-        badge.addEventListener('click', () => {
+        const toggleGold = () => {
           showGold = !showGold;
           imgEl.classList.toggle('fns-gold-img', showGold);
           badge.textContent = showGold ? '★ GOLD' : 'NORMAL';
+        };
+        badge.addEventListener('click', e => {
+          e.stopPropagation();
+          toggleGold();
         });
+        card.addEventListener('click', toggleGold);
       }
 
       grid.appendChild(card);
@@ -1975,15 +1839,11 @@
 
   window.tpToSticker = function () {
     const cam = extractCamera(activeLevelInstance);
-    if (!cam || activeSpawns.length === 0) {
-      console.warn('[StickerSystem] Kein aktiver Sticker im aktuellen Level.');
-      return;
-    }
-    const valid = activeSpawns.find(s => s && s.group);
+    if (!cam || activeSpawns.length === 0) return;
+    const valid = activeSpawns.find(s => s && s.group && s.group.visible);
     if (!valid) return;
     const target = valid.group.position;
     cam.position.set(target.x, target.y + 0.5, target.z + 1.2);
-    console.log('[StickerSystem] Zum Sticker teleportiert:', target);
   };
 
   function processRegisteredClasses() {

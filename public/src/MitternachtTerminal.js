@@ -1,5 +1,6 @@
 export class MitternachtTerminal {
     constructor(audio, onSuccessCallback) {
+    if (typeof window !== 'undefined') { window.__fnsActiveTerminalInstance = this; }
         this.audio = audio;
         this.onSuccess = onSuccessCallback;
         this.currentInput = "";
