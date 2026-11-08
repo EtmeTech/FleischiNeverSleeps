@@ -14,12 +14,13 @@ Ein webbasiertes 3D-First-Person-Horrorspiel auf Basis von Three.js und WebGL 2.
 6. [Systemanforderungen](#systemanforderungen)
 7. [Projektstruktur](#projektstruktur)
 8. [Technische Architektur](#technische-architektur)
+9. [Vorschau / Screenshots](#vorschau--screenshots)
 
 ---
 
 ## Übersicht
 
-In "Fleischi Never Sleeps" erwachst du um Mitternacht in einem verlassenen Schul- und Wohnkomplex. Das Wesen Fleischi lauert in den Schatten und reagiert auf Schrittgeräusche, Erschütterungen und Fehler bei elektronischen Schließmechanismen. Ziel des Spiels ist es, alle sechs Abschnitte zu überleben, Rätsel zu lösen und den finalen Ausgang zu erreichen.
+In "Fleischi Never Sleeps" erwachst du um Mitternacht in einem verlassenen Schul- und Wohnkomplex. Das feindliche Wesen Fleischi lauert in den Schatten und reagiert auf Schrittgeräusche, Erschütterungen und Fehler bei elektronischen Schließmechanismen. Ziel des Spiels ist es, alle sechs Abschnitte zu überleben, Rätsel zu lösen und den finalen Ausgang zu erreichen.
 
 ---
 
@@ -43,7 +44,7 @@ In "Fleischi Never Sleeps" erwachst du um Mitternacht in einem verlassenen Schul
 Erkunden des Startzimmers, Auffinden des Schlüssels über den Laptop, Aktivieren der analogen Wanduhr und Gravieren der Mitternachtsformel in das Terminal der Zimmertür. Anschließende Flucht durch den Korridor in den Fahrstuhl, Lösen des Absolutglied-Codes und Absturz der Kabine.
 
 ### 2. Die Fleischrooms
-Endlose, labyrinthische Gänge mit Gesichter-Mustern. Der Spieler muss markierte Türen öffnen, während unvorhersehbare Countdowns Fleischis Verfolgung auslösen.
+Endlose, labyrinthische Gänge mit Gesichter-Mustern. Der Spieler muss zehn markierte Türen öffnen, während unvorhersehbare Countdowns Fleischis Verfolgung auslösen.
 
 ### 3. Schulflur & 2er-Potenzen
 Schleichpassage durch dunkle Schulflure. Patrouillierende Taschenlampen-Wachen müssen durch Verstecken in Spinden umgangen werden. Im anschließenden Bunker-Treppenhaus muss die Tür mit dem Wert 2⁸ (Tür 256) identifiziert werden.
@@ -124,6 +125,17 @@ Rechtsklick auf `public/index.html` und "Open with Live Server" auswählen.
 FleischiNeverSleeps/
 ├── Hardware.txt
 ├── README.md
+├── preview/
+│   ├── 2erPotenzZahlen.png
+│   ├── Bibiothek.png
+│   ├── FleischiFasst.png
+│   ├── Fleischrooms.png
+│   ├── flur.png
+│   ├── Heitzungskeller.png
+│   ├── Labyrinth.png
+│   ├── menu.png
+│   ├── School.png
+│   └── zimmer.png
 └── public/
     ├── index.html
     ├── assets/
@@ -158,4 +170,28 @@ FleischiNeverSleeps/
 - **Kollision & Physik:** Eigene AABB-Kollisionserkennung mit kontinuierlicher Bewegungsauflösung, Rampen-Interpolation und Schwerkraftberechnung in `PhysicsEngine.js`.
 - **Audio-Engine:** Hybrides System in `AudioSynthesizer.js`, das reale MP3-Samples asynchron puffert und mit parametrischen Web-Audio-Oszillatoren (Sawtooth, Triangle, Square, Bandpass-Filter) kombiniert.
 - **Zustandsspeicherung:** Persistente Speicherung freigeschalteter Level und individueller Tastaturbelegungen über das `localStorage`-Interface.
+
+---
+
+## Vorschau / Screenshots
+
+### Interface & Antagonist
+
+| Hauptmenü | Fleischi Monster |
+| :---: | :---: |
+| ![Hauptmenü](preview/menu.png) | ![Fleischi](preview/FleischiFasst.png) |
+
+### Level-Impressionen
+
+| Level 1: Schlafzimmer | Level 2: Die Fleischrooms |
+| :---: | :---: |
+| ![Startzimmer](preview/zimmer.png) | ![Fleischrooms](preview/Fleischrooms.png) |
+
+| Level 3: Schulflur (Ansicht 1) | Level 3: Schulflur (Ansicht 2) | Level 3: 2er-Potenzen |
+| :---: | :---: | :---: |
+| ![Schulflur](preview/flur.png) | ![School](preview/School.png) | ![2er-Potenzen](preview/2erPotenzZahlen.png) |
+
+| Level 4: Mega Labyrinth | Level 5: Heizungskeller | Level 6: Schul-Bibliothek |
+| :---: | :---: | :---: |
+| ![Mega Labyrinth](preview/Labyrinth.png) | ![Gefluteter Heizungskeller](preview/Heitzungskeller.png) | ![Bibliothek](preview/Bibiothek.png) |
 
