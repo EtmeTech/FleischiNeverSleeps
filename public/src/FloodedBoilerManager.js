@@ -1,8 +1,10 @@
 import * as THREE from 'three';
+if (typeof window !== 'undefined') { window.THREE = THREE; }
 import { FleischiMonster } from './FleischiMonster.js';
 
 export class FloodedBoilerManager {
     constructor(scene, camera, player, audio, physics, onVictoryCallback, onCaughtCallback) {
+    if (typeof window !== 'undefined') { setTimeout(() => window.StickerSystem && window.StickerSystem.notifyLevelActive('heizungskeller', this), 200); }
         this.scene = scene;
         this.camera = camera;
         this.player = player;
@@ -1424,4 +1426,14 @@ export class FloodedBoilerManager {
             }
         }
     }
+}
+
+
+/* === FNS STICKER HOOK === */
+if (typeof window !== 'undefined' && typeof FloodedBoilerManager !== 'undefined') {
+  window.__FNS_REGISTER_LEVEL_CLASS__ = window.__FNS_REGISTER_LEVEL_CLASS__ || [];
+  window.__FNS_REGISTER_LEVEL_CLASS__.push({ key: 'heizungskeller', cls: FloodedBoilerManager });
+  if (window.StickerSystem && window.StickerSystem.hookLevelClass) {
+    window.StickerSystem.hookLevelClass('heizungskeller', FloodedBoilerManager);
+  }
 }

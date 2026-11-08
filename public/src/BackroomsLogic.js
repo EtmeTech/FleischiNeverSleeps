@@ -1,5 +1,6 @@
 export class BackroomsLogic {
     constructor(engineRef, targetDoorCount = 10) {
+    if (typeof window !== 'undefined') { setTimeout(() => window.StickerSystem && window.StickerSystem.notifyLevelActive('fleischrooms', this), 350); }
         this.doorsOpened = 0;
         this.targetDoorCount = targetDoorCount;
         this.isHunting = false;
@@ -92,4 +93,14 @@ export class BackroomsLogic {
             this.engine.loadNextLevel();
         }
     }
+}
+
+
+/* === FNS STICKER HOOK === */
+if (typeof window !== 'undefined' && typeof BackroomsLogic !== 'undefined') {
+  window.__FNS_REGISTER_LEVEL_CLASS__ = window.__FNS_REGISTER_LEVEL_CLASS__ || [];
+  window.__FNS_REGISTER_LEVEL_CLASS__.push({ key: 'fleischrooms', cls: BackroomsLogic });
+  if (window.StickerSystem && window.StickerSystem.hookLevelClass) {
+    window.StickerSystem.hookLevelClass('fleischrooms', BackroomsLogic);
+  }
 }

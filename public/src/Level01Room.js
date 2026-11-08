@@ -1,8 +1,10 @@
 import * as THREE from 'three';
+if (typeof window !== 'undefined') { window.THREE = THREE; }
 import { ProceduralTextures } from './ProceduralTextures.js';
 
 export class Level01Room {
     constructor(scene, camera, physics, audio, onTriggerMidnightScare) {
+    if (typeof window !== 'undefined') { setTimeout(() => window.StickerSystem && window.StickerSystem.notifyLevelActive('gang', this), 350); }
         this.scene = scene;
         this.camera = camera;
         this.physics = physics;
@@ -780,4 +782,14 @@ export class Level01Room {
             this.heldKeyGroup.position.y = -0.24 + Math.sin(this.handBobTimer) * 0.008;
         }
     }
+}
+
+
+/* === FNS STICKER HOOK === */
+if (typeof window !== 'undefined' && typeof Level01Room !== 'undefined') {
+  window.__FNS_REGISTER_LEVEL_CLASS__ = window.__FNS_REGISTER_LEVEL_CLASS__ || [];
+  window.__FNS_REGISTER_LEVEL_CLASS__.push({ key: 'gang', cls: Level01Room });
+  if (window.StickerSystem && window.StickerSystem.hookLevelClass) {
+    window.StickerSystem.hookLevelClass('gang', Level01Room);
+  }
 }

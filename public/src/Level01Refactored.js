@@ -1,9 +1,11 @@
 import * as THREE from 'three';
+if (typeof window !== 'undefined') { window.THREE = THREE; }
 import { ProceduralTextures } from './ProceduralTextures.js';
 import { MitternachtTerminal } from './MitternachtTerminal.js';
 
 export class Level01 {
     constructor(scene, graphicsEngine, onUnlock) {
+    if (typeof window !== 'undefined') { setTimeout(() => window.StickerSystem && window.StickerSystem.notifyLevelActive('gang', this), 350); }
         this.scene = scene;
         this.graphics = graphicsEngine;
         this.onUnlock = onUnlock;
@@ -47,4 +49,14 @@ export class Level01 {
         // Subtle light flicker
         this.lampLight.intensity = 4.5 + Math.random() * 1.0;
     }
+}
+
+
+/* === FNS STICKER HOOK === */
+if (typeof window !== 'undefined' && typeof Level01 !== 'undefined') {
+  window.__FNS_REGISTER_LEVEL_CLASS__ = window.__FNS_REGISTER_LEVEL_CLASS__ || [];
+  window.__FNS_REGISTER_LEVEL_CLASS__.push({ key: 'gang', cls: Level01 });
+  if (window.StickerSystem && window.StickerSystem.hookLevelClass) {
+    window.StickerSystem.hookLevelClass('gang', Level01);
+  }
 }

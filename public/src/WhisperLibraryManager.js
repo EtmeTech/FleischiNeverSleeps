@@ -1,8 +1,10 @@
 import * as THREE from 'three';
+if (typeof window !== 'undefined') { window.THREE = THREE; }
 import { FleischiMonster } from './FleischiMonster.js';
 
 export class WhisperLibraryManager {
     constructor(scene, camera, player, audio, physics, onVictoryCallback, onCaughtCallback) {
+    if (typeof window !== 'undefined') { setTimeout(() => window.StickerSystem && window.StickerSystem.notifyLevelActive('bibliothek', this), 200); }
         this.scene = scene;
         this.camera = camera;
         this.player = player;
@@ -1297,4 +1299,14 @@ export class WhisperLibraryManager {
 
         this.drawMinimap();
     }
+}
+
+
+/* === FNS STICKER HOOK === */
+if (typeof window !== 'undefined' && typeof WhisperLibraryManager !== 'undefined') {
+  window.__FNS_REGISTER_LEVEL_CLASS__ = window.__FNS_REGISTER_LEVEL_CLASS__ || [];
+  window.__FNS_REGISTER_LEVEL_CLASS__.push({ key: 'bibliothek', cls: WhisperLibraryManager });
+  if (window.StickerSystem && window.StickerSystem.hookLevelClass) {
+    window.StickerSystem.hookLevelClass('bibliothek', WhisperLibraryManager);
+  }
 }

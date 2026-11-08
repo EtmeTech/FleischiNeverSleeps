@@ -1,7 +1,9 @@
 import * as THREE from 'three';
+if (typeof window !== 'undefined') { window.THREE = THREE; }
 
 export class StaircaseLevel {
     constructor(scene, playerControls, onExitReached) {
+    if (typeof window !== 'undefined') { setTimeout(() => window.StickerSystem && window.StickerSystem.notifyLevelActive('potenz_treppenhaus', this), 200); }
         this.scene = scene;
         this.player = playerControls;
         this.onExitReached = onExitReached;
@@ -44,4 +46,14 @@ export class StaircaseLevel {
             setTimeout(() => window.location.reload(), 1800);
         }
     }
+}
+
+
+/* === FNS STICKER HOOK === */
+if (typeof window !== 'undefined' && typeof StaircaseLevel !== 'undefined') {
+  window.__FNS_REGISTER_LEVEL_CLASS__ = window.__FNS_REGISTER_LEVEL_CLASS__ || [];
+  window.__FNS_REGISTER_LEVEL_CLASS__.push({ key: 'potenz_treppenhaus', cls: StaircaseLevel });
+  if (window.StickerSystem && window.StickerSystem.hookLevelClass) {
+    window.StickerSystem.hookLevelClass('potenz_treppenhaus', StaircaseLevel);
+  }
 }

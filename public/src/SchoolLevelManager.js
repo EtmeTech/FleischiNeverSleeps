@@ -1,8 +1,10 @@
 import * as THREE from 'three';
+if (typeof window !== 'undefined') { window.THREE = THREE; }
 import { FleischiMonster } from './FleischiMonster.js';
 
 export class SchoolLevelManager {
     constructor(scene, camera, player, audio, physics, onExitSchoolStairwell, onCaughtCallback) {
+    if (typeof window !== 'undefined') { setTimeout(() => window.StickerSystem && window.StickerSystem.notifyLevelActive('school_hallway', this), 200); }
         this.scene = scene;
         this.camera = camera;
         this.player = player;
@@ -1518,4 +1520,14 @@ export class SchoolLevelManager {
             }
         }
     }
+}
+
+
+/* === FNS STICKER HOOK === */
+if (typeof window !== 'undefined' && typeof SchoolLevelManager !== 'undefined') {
+  window.__FNS_REGISTER_LEVEL_CLASS__ = window.__FNS_REGISTER_LEVEL_CLASS__ || [];
+  window.__FNS_REGISTER_LEVEL_CLASS__.push({ key: 'school_hallway', cls: SchoolLevelManager });
+  if (window.StickerSystem && window.StickerSystem.hookLevelClass) {
+    window.StickerSystem.hookLevelClass('school_hallway', SchoolLevelManager);
+  }
 }

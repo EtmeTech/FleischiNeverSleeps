@@ -1,10 +1,12 @@
 import { ProceduralTextures } from './ProceduralTextures.js';
 import * as THREE from 'three';
+if (typeof window !== 'undefined') { window.THREE = THREE; }
 import { FleischiMonster } from './FleischiMonster.js';
 import { BackroomsLogic } from './BackroomsLogic.js';
 
 export class FleischroomsManager {
     constructor(scene, camera, player, audio, physics, onWalkThroughExitPortal, onCaughtInFleischrooms) {
+    if (typeof window !== 'undefined') { setTimeout(() => window.StickerSystem && window.StickerSystem.notifyLevelActive('fleischrooms', this), 200); }
         this.scene = scene;
         this.camera = camera;
         this.player = player;
@@ -427,4 +429,14 @@ export class FleischroomsManager {
             }
         }
     }
+}
+
+
+/* === FNS STICKER HOOK === */
+if (typeof window !== 'undefined' && typeof FleischroomsManager !== 'undefined') {
+  window.__FNS_REGISTER_LEVEL_CLASS__ = window.__FNS_REGISTER_LEVEL_CLASS__ || [];
+  window.__FNS_REGISTER_LEVEL_CLASS__.push({ key: 'fleischrooms', cls: FleischroomsManager });
+  if (window.StickerSystem && window.StickerSystem.hookLevelClass) {
+    window.StickerSystem.hookLevelClass('fleischrooms', FleischroomsManager);
+  }
 }

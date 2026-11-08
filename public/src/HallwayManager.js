@@ -1,9 +1,11 @@
 import * as THREE from 'three';
+if (typeof window !== 'undefined') { window.THREE = THREE; }
 import { ProceduralTextures } from './ProceduralTextures.js';
 import { FleischiMonster } from './FleischiMonster.js';
 
 export class HallwayManager {
     constructor(scene, camera, playerController, audio, physics, onElevatorLanded, onCaughtInHallway) {
+    if (typeof window !== 'undefined') { setTimeout(() => window.StickerSystem && window.StickerSystem.notifyLevelActive('gang', this), 200); }
         this.scene = scene;
         this.camera = camera;
         this.player = playerController;
@@ -804,4 +806,14 @@ export class HallwayManager {
             this.monsterEntity.animate(delta, false);
         }
     }
+}
+
+
+/* === FNS STICKER HOOK === */
+if (typeof window !== 'undefined' && typeof HallwayManager !== 'undefined') {
+  window.__FNS_REGISTER_LEVEL_CLASS__ = window.__FNS_REGISTER_LEVEL_CLASS__ || [];
+  window.__FNS_REGISTER_LEVEL_CLASS__.push({ key: 'gang', cls: HallwayManager });
+  if (window.StickerSystem && window.StickerSystem.hookLevelClass) {
+    window.StickerSystem.hookLevelClass('gang', HallwayManager);
+  }
 }

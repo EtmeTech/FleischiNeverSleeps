@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+if (typeof window !== 'undefined') { window.THREE = THREE; }
 import { ElevatorKeypad } from './Level03Elevator.js';
 import { BackroomsLogic } from './BackroomsLogic.js';
 

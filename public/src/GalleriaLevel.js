@@ -1,7 +1,9 @@
 import * as THREE from 'three';
+if (typeof window !== 'undefined') { window.THREE = THREE; }
 
 export class GalleriaLevel {
     constructor(scene, playerControls) {
+    if (typeof window !== 'undefined') { setTimeout(() => window.StickerSystem && window.StickerSystem.notifyLevelActive('mega_labyrinth', this), 350); }
         this.scene = scene;
         this.player = playerControls;
         this.fusesCollected = 0;
@@ -70,4 +72,14 @@ export class GalleriaLevel {
             }
         }
     }
+}
+
+
+/* === FNS STICKER HOOK === */
+if (typeof window !== 'undefined' && typeof GalleriaLevel !== 'undefined') {
+  window.__FNS_REGISTER_LEVEL_CLASS__ = window.__FNS_REGISTER_LEVEL_CLASS__ || [];
+  window.__FNS_REGISTER_LEVEL_CLASS__.push({ key: 'mega_labyrinth', cls: GalleriaLevel });
+  if (window.StickerSystem && window.StickerSystem.hookLevelClass) {
+    window.StickerSystem.hookLevelClass('mega_labyrinth', GalleriaLevel);
+  }
 }

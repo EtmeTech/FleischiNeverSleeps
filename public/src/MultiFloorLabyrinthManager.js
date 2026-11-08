@@ -1,8 +1,10 @@
 import * as THREE from 'three';
+if (typeof window !== 'undefined') { window.THREE = THREE; }
 import { FleischiMonster } from './FleischiMonster.js';
 
 export class MultiFloorLabyrinthManager {
     constructor(scene, camera, player, audio, physics, onVictoryCallback, onCaughtCallback) {
+    if (typeof window !== 'undefined') { setTimeout(() => window.StickerSystem && window.StickerSystem.notifyLevelActive('mega_labyrinth', this), 200); }
         this.scene = scene;
         this.camera = camera;
         this.player = player;
@@ -1128,3 +1130,13 @@ MultiFloorLabyrinthManager.prototype.createWorldScaledBoxGeometry = function(w, 
     uv.needsUpdate = true;
     return geo;
 };
+
+
+/* === FNS STICKER HOOK === */
+if (typeof window !== 'undefined' && typeof MultiFloorLabyrinthManager !== 'undefined') {
+  window.__FNS_REGISTER_LEVEL_CLASS__ = window.__FNS_REGISTER_LEVEL_CLASS__ || [];
+  window.__FNS_REGISTER_LEVEL_CLASS__.push({ key: 'mega_labyrinth', cls: MultiFloorLabyrinthManager });
+  if (window.StickerSystem && window.StickerSystem.hookLevelClass) {
+    window.StickerSystem.hookLevelClass('mega_labyrinth', MultiFloorLabyrinthManager);
+  }
+}

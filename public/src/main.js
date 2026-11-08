@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+if (typeof window !== 'undefined') { window.THREE = THREE; }
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 import { PhysicsEngine } from './PhysicsEngine.js?v=1794067776';
 import { PlayerController } from './PlayerController.js?v=1794067776';
