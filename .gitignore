@@ -147,3 +147,22 @@ vite.config.ts.timestamp-*
 
 # Turbo Repo
 .turbo
+
+# ==========================================
+# Python spezifische Ignorierungen
+# ==========================================
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtuelle Umgebungen (falls ihr eine nutzt)
+venv/
+.venv/
+env/
+ENV/
+
+# Betriebssystem-Spezifisches (Desktop-Caches)
+.DS_Store
+Thumbs.db
