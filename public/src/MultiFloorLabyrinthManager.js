@@ -66,7 +66,7 @@ export class MultiFloorLabyrinthManager {
     }
 
     // 1. AUFWENDIGE 1024x1024 LABYRINTH-WANDTEXTUR (Viktorianische Damast-Tapete, Holz-Kassetten, Risse & Goldrahmen-Fleischi-Porträts!)
-    createElaborateLabyrinthWallMaterial(theme = '0') {
+    createElaborateLabyrinthWallMaterial(theme = '0', portraitSrc = 'assets/textures/fleischi_face.png') {
         const canvas = document.createElement('canvas');
         canvas.width = 1024;
         canvas.height = 1024;
@@ -159,14 +159,11 @@ export class MultiFloorLabyrinthManager {
         tex.wrapT = THREE.RepeatWrapping;
 
         const img = new Image();
-        img.src = 'assets/textures/fleischi_face.png';
+        img.src = portraitSrc;
         img.onload = () => {
             // Statt lose schwebender Köpfe: 4 prunkvolle gerahmte Gemälde / Medaillons mit Glas-Schattierung in der Tapete!
             const frames = [
-                { x: 140, y: 245, w: 185, h: 230, oval: false },
-                { x: 392, y: 315, w: 175, h: 215, oval: true },
-                { x: 644, y: 240, w: 185, h: 230, oval: false },
-                { x: 896, y: 310, w: 175, h: 215, oval: true }
+                { x: 512, y: 360, w: 380, h: 500, oval: false }
             ];
 
             for (const fr of frames) {
@@ -209,7 +206,8 @@ export class MultiFloorLabyrinthManager {
                 ctx.clip();
 
                 ctx.globalAlpha = 0.88;
-                ctx.drawImage(img, -fr.w / 2, -fr.h / 2, fr.w, fr.h);
+                const sc = Math.max(fr.w / img.width, fr.h / img.height);
+                ctx.drawImage(img, -img.width * sc / 2, -img.height * sc / 2, img.width * sc, img.height * sc);
 
                 // Gealterte Gemälde-Vignette & Firnis-Risse über dem Porträt
                 const vig = ctx.createRadialGradient(0, 0, fr.w * 0.15, 0, 0, fr.w * 0.65);
@@ -352,6 +350,11 @@ export class MultiFloorLabyrinthManager {
             '-1': this.createElaborateLabyrinthWallMaterial('-1'),
             '0': this.createElaborateLabyrinthWallMaterial('0'),
             '1': this.createElaborateLabyrinthWallMaterial('1')
+        };
+        this.wallMaterialsNoel = {
+            '-1': this.createElaborateLabyrinthWallMaterial('-1', 'assets/textures/noel.png'),
+            '0': this.createElaborateLabyrinthWallMaterial('0', 'assets/textures/noel.png'),
+            '1': this.createElaborateLabyrinthWallMaterial('1', 'assets/textures/noel.png')
         };
         this.floorMat = this.createElaborateLabyrinthFloorMaterial();
         this.stairMat = this.createElaborateStairMaterial();
@@ -707,6 +710,7 @@ export class MultiFloorLabyrinthManager {
         const wallH = 4.35;
         const wallY = fy + wallH / 2 - 0.1;
         const mat = this.wallMaterials[floorKey];
+        const noelMat = this.wallMaterialsNoel[floorKey];
         const N = this.gridCount;
 
         this.addWallSegment(0, wallY, -64.0, 128.5, wallH, 0.5, mat, floorKey, fy);
@@ -719,7 +723,7 @@ export class MultiFloorLabyrinthManager {
                 if (!openEdges.has(this.edgeKey(cx, cz, cx + 1, cz))) {
                     const wx = -56.0 + cx * 8.0;
                     const wz = -60.0 + cz * 8.0;
-                    this.addWallSegment(wx, wallY, wz, 0.5, wallH, 8.2, mat, floorKey, fy);
+                    this.addWallSegment(wx, wallY, wz, 0.5, wallH, 8.2, ((cx * 7 + cz * 3) % 3 === 0) ? noelMat : mat, floorKey, fy);
                 }
             }
         }
@@ -729,7 +733,7 @@ export class MultiFloorLabyrinthManager {
                 if (!openEdges.has(this.edgeKey(cx, cz, cx, cz + 1))) {
                     const wx = -60.0 + cx * 8.0;
                     const wz = -56.0 + cz * 8.0;
-                    this.addWallSegment(wx, wallY, wz, 8.2, wallH, 0.5, mat, floorKey, fy);
+                    this.addWallSegment(wx, wallY, wz, 8.2, wallH, 0.5, ((cx * 5 + cz * 2) % 3 === 0) ? noelMat : mat, floorKey, fy);
                 }
             }
         }
