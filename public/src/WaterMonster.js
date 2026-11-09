@@ -1,3 +1,4 @@
+import { milanMode } from './MilanModeManager.js';
 import * as THREE from 'three';
 
 export class WaterMonster {
@@ -37,3 +38,30 @@ export class WaterMonster {
         // Renders particle bubbles moving towards targetPos
     }
 }
+
+
+// [MILAN_MODE_HOOK_B2]
+
+(() => {
+    const cls = (typeof WaterMonster !== 'undefined') ? WaterMonster : null;
+    if (!cls || !cls.prototype) return;
+    const proto = cls.prototype;
+
+    for (const method of Object.getOwnPropertyNames(proto)) {
+        if (method === 'constructor' || typeof proto[method] !== 'function') continue;
+        const orig = proto[method];
+        proto[method] = function(...args) {
+            milanMode.registerMonster(this);
+            if (this._milanFurzKnockedDown) {
+                return; // Stunned & knocked over by Milan Furz smoke!
+            }
+            if (milanMode.isMilan && (method.toLowerCase().includes('update') || method.toLowerCase().includes('tick') || method.toLowerCase().includes('move'))) {
+                if (args.length > 0 && typeof args[0] === 'number' && args[0] < 0.5) {
+                    args[0] = args[0] * 1.8; // 80% faster WaterMonster in Milan mode
+                }
+            }
+            return orig.apply(this, args);
+        };
+    }
+})();
+

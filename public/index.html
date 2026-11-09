@@ -3,6 +3,7 @@
 <head>
   <script src="stickerSystem.js"></script>
   <script src="gamepadSystem.js"></script>
+  <script type="module" src="src/DifficultyManager.js"></script>
     <meta charset="UTF-8">
     <title>Fleischi Never Sleeps</title>
     <style>
@@ -307,7 +308,7 @@
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: radial-gradient(circle, #1a0000 0%, #000000 75%);
             opacity: 0; pointer-events: none; z-index: 950;
-            transition: opacity 0.65s ease-in-out;
+            transition: opacity 0.55s ease-in-out;
         }
 
         #jumpscare-overlay {
@@ -371,7 +372,6 @@
         }
         #door-counter-hud { display: none; }
     </style>
-    <script async src="https://unpkg.com/es-module-shims@1.6.3/dist/es-module-shims.js"></script>
     <script type="importmap">
       { "imports": { "three": "https://unpkg.com/three@0.150.1/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.150.1/examples/jsm/" } }
     </script>

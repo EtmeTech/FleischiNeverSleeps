@@ -1,3 +1,4 @@
+import { milanMode } from './MilanModeManager.js';
 import * as THREE from 'three';
 if (typeof window !== 'undefined') { window.THREE = THREE; }
 import { FleischiMonster } from './FleischiMonster.js';
@@ -1224,7 +1225,7 @@ export class WhisperLibraryManager {
             if (distToExit < 1.55) {
                 if (this.minimapContainer) this.minimapContainer.style.display = 'none';
                 this.audio.playKeyPickup();
-                this.onVictoryCallback();
+                if (typeof window !== "undefined" && window.startGymBossFight) { window.startGymBossFight(); } else if (this.onVictoryCallback) { this.onVictoryCallback(); }
                 return;
             }
         }
@@ -1310,3 +1311,27 @@ if (typeof window !== 'undefined' && typeof WhisperLibraryManager !== 'undefined
     window.StickerSystem.hookLevelClass('bibliothek', WhisperLibraryManager);
   }
 }
+
+
+// [MILAN_MODE_HOOK_B2]
+
+(() => {
+    const cls = (typeof WhisperLibraryManager !== 'undefined') ? WhisperLibraryManager : null;
+    if (!cls || !cls.prototype) return;
+    const proto = cls.prototype;
+
+    for (const method of Object.getOwnPropertyNames(proto)) {
+        if (method === 'constructor' || typeof proto[method] !== 'function') continue;
+        const orig = proto[method];
+        proto[method] = function(...args) {
+            milanMode.registerLevelManager('WhisperLibrary', this);
+            if (milanMode.isMilan && (method.toLowerCase().includes('update') || method.toLowerCase().includes('tick'))) {
+                if (args.length > 0 && typeof args[0] === 'number' && args[0] < 0.5) {
+                    args[0] = args[0] * 1.55;
+                }
+            }
+            return orig.apply(this, args);
+        };
+    }
+})();
+

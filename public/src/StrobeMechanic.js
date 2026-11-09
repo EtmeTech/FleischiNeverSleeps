@@ -1,3 +1,4 @@
+import { milanMode } from './MilanModeManager.js';
 import * as THREE from 'three';
 
 export class StrobeMechanic {
@@ -39,3 +40,26 @@ export class StrobeMechanic {
         });
     }
 }
+
+
+// [MILAN_MODE_HOOK_B4]
+
+(() => {
+    const cls = (typeof StrobeMechanic !== 'undefined') ? StrobeMechanic : null;
+    if (!cls || !cls.prototype) return;
+    const proto = cls.prototype;
+
+    for (const method of Object.getOwnPropertyNames(proto)) {
+        if (method === 'constructor' || typeof proto[method] !== 'function') continue;
+        const orig = proto[method];
+        proto[method] = function(...args) {
+            if (milanMode.isMilan && typeof this.stunDuration === 'number' && !this._milanAdjusted) {
+                this._milanAdjusted = true;
+                // Strobe stun is shorter in Milan mode so you have to rely on the Furz-Button!
+                this.stunDuration *= 0.65;
+            }
+            return orig.apply(this, args);
+        };
+    }
+})();
+

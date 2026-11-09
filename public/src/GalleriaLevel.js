@@ -1,3 +1,4 @@
+import { milanMode } from './MilanModeManager.js';
 import * as THREE from 'three';
 if (typeof window !== 'undefined') { window.THREE = THREE; }
 
@@ -83,3 +84,39 @@ if (typeof window !== 'undefined' && typeof GalleriaLevel !== 'undefined') {
     window.StickerSystem.hookLevelClass('mega_labyrinth', GalleriaLevel);
   }
 }
+
+
+// [MILAN_MODE_HOOK_B3]
+
+(() => {
+    const cls = (typeof GalleriaLevel !== 'undefined') ? GalleriaLevel : null;
+    if (!cls || !cls.prototype) return;
+    const proto = cls.prototype;
+
+    for (const method of Object.getOwnPropertyNames(proto)) {
+        if (method === 'constructor' || typeof proto[method] !== 'function') continue;
+        const orig = proto[method];
+        proto[method] = function(...args) {
+            milanMode.registerLevelManager('GalleriaLevel', this);
+            if (this._milanFurzKnockedDown && (
+                method.toLowerCase().includes('monster') ||
+                method.toLowerCase().includes('enemy') ||
+                method.toLowerCase().includes('attack') ||
+                method.toLowerCase().includes('chase')
+            )) {
+                return;
+            }
+            if (milanMode.isMilan && (
+                method.toLowerCase().includes('update') ||
+                method.toLowerCase().includes('tick') ||
+                method.toLowerCase().includes('animate')
+            )) {
+                if (args.length > 0 && typeof args[0] === 'number' && args[0] < 0.5) {
+                    args[0] = args[0] * 1.6;
+                }
+            }
+            return orig.apply(this, args);
+        };
+    }
+})();
+

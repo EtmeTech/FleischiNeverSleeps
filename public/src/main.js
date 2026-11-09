@@ -1,3 +1,5 @@
+import { milanMode } from './MilanModeManager.js';
+import { GymBossManager } from './GymBossManager.js';
 import * as THREE from 'three';
 if (typeof window !== 'undefined') { window.THREE = THREE; }
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
@@ -22,6 +24,10 @@ scene.fog = new THREE.FogExp2(0x020202, 0.06);
 const camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.1, 1000);
 camera.rotation.order = 'YXZ';
 scene.add(camera);
+
+// Guard: never run the game twice (a second run creates a second canvas + game loop)
+if (window.__FNS_MAIN_LOADED__) { throw new Error('main.js loaded twice - second instance aborted'); }
+window.__FNS_MAIN_LOADED__ = true;
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -80,6 +86,7 @@ let fleischrooms = null;
 let schoolLevel = null;
 let multiFloorLabyrinth = null;
 let floodedBoiler = null;
+let gymBoss = null;
 let whisperLibrary = null;
 
 const raycaster = new THREE.Raycaster();
@@ -426,6 +433,7 @@ function returnToMainMenu() {
         hallway.resetHallway();
     }
 
+    if (typeof gymBoss !== 'undefined' && gymBoss && gymBoss.dispose) { gymBoss.dispose(); gymBoss = null; }
     currentStage = 'menu';
     menuCctvMonster.group.visible = true;
     if (crosshairUI) crosshairUI.style.display = 'none';
@@ -830,12 +838,13 @@ function startWhisperLibraryLevel() {
         audio,
         physics,
         () => {
-            if (hud) {
-                hud.innerText = "FLÜSTER-BIBLIOTHEK ÜBERLEBT – DU BIST ENTKOMMEN!";
-                hud.style.color = '#00ffaa';
-                hud.style.display = 'block';
-            }
-            setTimeout(() => returnToMainMenu(), 3500);
+            fadeUI.style.opacity = '0';
+            setTimeout(() => {
+                if (whisperLibrary && whisperLibrary.group) scene.remove(whisperLibrary.group);
+                whisperLibrary = null;
+                startGymBossFight();
+                setTimeout(() => { fadeUI.style.opacity = '0'; }, 350);
+            }, 650);
         },
         (monsterEntity, monsterGroup) => {
             startGrabAndLiftSequence(monsterEntity, monsterGroup, () => {
@@ -1016,6 +1025,14 @@ function animate() {
         return;
     }
 
+    if (isBeingGrabbed && (!grabMonsterGroup || !grabMonsterEntity || grabTimer > 2.4)) {
+        isBeingGrabbed = false;
+        grabTimer = 0;
+        if (fadeUI) fadeUI.style.opacity = '0';
+    }
+    if (!isBeingGrabbed && fadeUI && fadeUI.style.opacity !== '0') {
+        fadeUI.style.opacity = '0';
+    }
     if (isBeingGrabbed && grabMonsterGroup && grabMonsterEntity) {
         grabTimer += delta;
 
@@ -1056,7 +1073,7 @@ function animate() {
             grabRespawnTriggered = true;
             grabMonsterEntity.resetPose();
             resetCameraUpright(grabSavedYaw);
-            if (grabRespawnCallback) grabRespawnCallback();
+            try { if (grabRespawnCallback) grabRespawnCallback(); } catch (e) { console.error(e); }
 
             setTimeout(() => {
                 resetCameraUpright(grabSavedYaw);
@@ -1095,7 +1112,8 @@ function animate() {
             (currentStage === 'school' && schoolLevel && schoolLevel.isEnteringWalk) ||
             (currentStage === 'labyrinth' && multiFloorLabyrinth && multiFloorLabyrinth.isEnteringWalk) ||
             (currentStage === 'boiler' && floodedBoiler && floodedBoiler.isEnteringWalk) ||
-            (currentStage === 'library' && whisperLibrary && whisperLibrary.isEnteringWalk);
+            (currentStage === 'library' && whisperLibrary && whisperLibrary.isEnteringWalk) ||
+            (currentStage === 'gym' && gymBoss && gymBoss.isEnteringWalk);
         if (!isAutoEntering) {
             player.update(delta);
         }
@@ -1115,9 +1133,188 @@ function animate() {
         floodedBoiler.update(delta);
     } else if (currentStage === 'library' && whisperLibrary) {
         whisperLibrary.update(delta);
+    } else if (currentStage === 'gym' && gymBoss) {
+        gymBoss.update(delta);
     }
 
     postProcessing.render(delta);
 }
 
 animate();
+
+// === SPORTHALLEN-BOSSKAMPF HOOK ===
+function startGymBossFight() {
+    if (gymBoss && gymBoss.dispose) {
+        gymBoss.dispose();
+        gymBoss = null;
+    }
+    if (typeof whisperLibrary !== 'undefined' && whisperLibrary) {
+        if (whisperLibrary.group) scene.remove(whisperLibrary.group);
+        whisperLibrary = null;
+    }
+    if (typeof floodedBoiler !== 'undefined' && floodedBoiler) {
+        if (floodedBoiler.group) scene.remove(floodedBoiler.group);
+        floodedBoiler = null;
+    }
+    if (typeof multiFloorLabyrinth !== 'undefined' && multiFloorLabyrinth) {
+        if (multiFloorLabyrinth.group) scene.remove(multiFloorLabyrinth.group);
+        multiFloorLabyrinth = null;
+    }
+    if (typeof schoolLevel !== 'undefined' && schoolLevel) {
+        if (schoolLevel.group) scene.remove(schoolLevel.group);
+        schoolLevel = null;
+    }
+    if (typeof fleischrooms !== 'undefined' && fleischrooms) {
+        if (fleischrooms.group) scene.remove(fleischrooms.group);
+        fleischrooms = null;
+    }
+
+    // Alte Physik-Kollisionen aus dem Startraum/vorherigen Leveln leeren
+    if (physics) {
+        if (Array.isArray(physics.obstacles)) physics.obstacles.length = 0;
+        if (Array.isArray(physics.ramps)) physics.ramps.length = 0;
+        if (Array.isArray(physics.colliders)) physics.colliders.length = 0;
+    }
+
+    const menuOverlay = document.getElementById('main-menu-overlay');
+    if (menuOverlay) menuOverlay.style.display = 'none';
+    const minimapEl = document.getElementById('minimap-container');
+    if (minimapEl) minimapEl.style.display = 'none';
+    const doorHudEl = document.getElementById('door-counter-hud');
+    if (doorHudEl) doorHudEl.style.display = 'none';
+    const promptEl = document.getElementById('interaction-prompt');
+    if (promptEl) promptEl.style.display = 'none';
+    const fadeEl = document.getElementById('fade-overlay');
+    if (fadeEl) fadeEl.style.opacity = '0';
+
+    const ingameBtn = document.getElementById('ingame-menu-btn');
+    if (ingameBtn) ingameBtn.style.display = 'block';
+    const crosshair = document.getElementById('crosshair');
+    if (crosshair) crosshair.style.display = 'block';
+
+    if (typeof resetCameraUpright === 'function') {
+        resetCameraUpright(0);
+    }
+
+    currentStage = 'gym';
+    gymBoss = new GymBossManager(
+        scene,
+        camera,
+        player,
+        audio,
+        physics,
+        () => {
+            if (gymBoss && gymBoss.dispose) {
+                gymBoss.dispose();
+                gymBoss = null;
+            }
+            // Wenn über Play gespielt wurde -> 5-Sterne-Endmenü zeigen, sonst direkt zurück ins Hauptmenü!
+            if (window.__fnsIsFullRun && typeof window.showFleischiVictoryScreen === 'function') {
+                window.showFleischiVictoryScreen();
+            } else {
+                if (ingameBtn) ingameBtn.click();
+            }
+        },
+        (monsterEntity, monsterGroup) => {
+            if (typeof triggerGrabJumpscare === 'function') {
+                triggerGrabJumpscare(monsterEntity, monsterGroup, () => {
+                    if (gymBoss) gymBoss.resetOnCatch();
+                });
+            } else if (gymBoss) {
+                gymBoss.resetOnCatch();
+            }
+        }
+    );
+
+    if (controls && controls.lock) {
+        try { controls.lock(); } catch (e) {}
+    }
+}
+window.startGymBossFight = startGymBossFight;
+
+function injectGymLevelButton() {
+    const grid = document.getElementById('levels-inline-grid');
+    if (!grid || document.getElementById('btn-level-gym-boss')) return;
+    const btn = document.createElement('button');
+    btn.id = 'btn-level-gym-boss';
+    btn.className = 'level-inline-btn unlocked';
+    btn.innerHTML = '<span>SPORTHALLE (BOSS)</span>';
+    btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        window.__fnsIsFullRun = false;
+        startGymBossFight();
+    });
+    grid.appendChild(btn);
+}
+setInterval(injectGymLevelButton, 400);
+
+// === DEBUG: window.skipLevel() jumps straight to the next level (ignores single/campaign mode) ===
+window.skipLevel = function skipLevel() {
+    const starters = {
+        act1: () => {
+            if (hallway) hallway.hideAll();
+            startFleischroomsLevel();
+            // Fleischrooms does not set a spawn itself (the hallway walk-in normally does)
+            player.groundY = 0;
+            player.footY = 0;
+            player.position.set(0, 1.6, -48.5);
+            camera.position.copy(player.position);
+            resetCameraUpright(0);
+        },
+        fleischrooms: () => enterSchoolHallwayThroughDoor(),
+        school: () => startMultiFloorLabyrinth(),
+        labyrinth: () => startFloodedBoilerLevel(),
+        boiler: () => startWhisperLibraryLevel(),
+        library: () => {
+            if (whisperLibrary && whisperLibrary.group) scene.remove(whisperLibrary.group);
+            whisperLibrary = null;
+            startGymBossFight();
+        },
+        gym: () => {
+            if (gymBoss && gymBoss.dispose) { gymBoss.dispose(); gymBoss = null; }
+            if (window.__fnsIsFullRun && typeof window.showFleischiVictoryScreen === 'function') {
+                window.showFleischiVictoryScreen();
+            } else {
+                const btn = document.getElementById('ingame-menu-btn');
+                if (btn) btn.click();
+            }
+        }
+    };
+    const order = ['act1', 'fleischrooms', 'school', 'labyrinth', 'boiler', 'library'];
+    const fn = starters[currentStage];
+    if (!fn) {
+        console.warn('[skipLevel] nothing to skip in stage:', currentStage);
+        return false;
+    }
+    const idx = order.indexOf(currentStage);
+    if (idx !== -1 && idx + 1 < order.length) unlockLevel(order[idx + 1]);
+    console.log('[skipLevel] skipping stage:', currentStage);
+    player.resetKeys();
+    fn();
+    if (controls && !controls.isLocked) { try { controls.lock(); } catch (e) {} }
+    console.log('[skipLevel] now in stage:', currentStage);
+    console.log('[skipLevel] debug', {
+        stage: currentStage,
+        playerPos: player.position.toArray().map(v => +v.toFixed(2)),
+        cameraPos: camera.position.toArray().map(v => +v.toFixed(2)),
+        level01Visible: level01 && level01.roomGroup ? level01.roomGroup.visible : null,
+        hallwayVisible: hallway && hallway.hallwayGroup ? hallway.hallwayGroup.visible : null,
+        fleischroomsExists: !!fleischrooms,
+        locked: controls.isLocked
+    });
+    return true;
+};
+
+// Victory screen background: show the CCTV menu scene without the menu UI
+window.__fnsEnterVictoryBackground = function () {
+    returnToMainMenu();
+    if (mainMenuUI) mainMenuUI.style.display = 'none';
+    if (ingameMenuBtn) ingameMenuBtn.style.display = 'none';
+};
+
+
+// [MILAN_MODE_HOOK]
+
+milanMode.init();
+

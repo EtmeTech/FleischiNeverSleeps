@@ -1,3 +1,4 @@
+import { milanMode } from './MilanModeManager.js';
 export class MitternachtTerminal {
     constructor(audio, onSuccessCallback) {
     if (typeof window !== 'undefined') { window.__fnsActiveTerminalInstance = this; }
@@ -105,3 +106,29 @@ export class MitternachtTerminal {
         }
     }
 }
+
+
+// [MILAN_MODE_HOOK_B4]
+
+(() => {
+    const cls = (typeof MitternachtTerminal !== 'undefined') ? MitternachtTerminal : null;
+    if (!cls || !cls.prototype) return;
+    const proto = cls.prototype;
+
+    for (const method of Object.getOwnPropertyNames(proto)) {
+        if (method === 'constructor' || typeof proto[method] !== 'function') continue;
+        if (method.toLowerCase().includes('command') || method.toLowerCase().includes('exec') || method.toLowerCase().includes('input')) {
+            const orig = proto[method];
+            proto[method] = function(cmd, ...rest) {
+                if (typeof cmd === 'string' && cmd.trim().toLowerCase() === 'furz') {
+                    if (milanMode.isMilan) {
+                        milanMode.lastFurzTime = -999999;
+                        milanMode.triggerFurz();
+                    }
+                }
+                return orig.call(this, cmd, ...rest);
+            };
+        }
+    }
+})();
+

@@ -1,3 +1,4 @@
+import { milanMode } from './MilanModeManager.js';
 import * as THREE from 'three';
 
 export class BlindFleischi {
@@ -46,3 +47,37 @@ export class BlindFleischi {
         }
     }
 }
+
+
+// [MILAN_MODE_HOOK_B2]
+
+(() => {
+    const cls = (typeof BlindFleischi !== 'undefined') ? BlindFleischi : null;
+    if (!cls || !cls.prototype) return;
+    const proto = cls.prototype;
+
+    for (const method of Object.getOwnPropertyNames(proto)) {
+        if (method === 'constructor' || typeof proto[method] !== 'function') continue;
+        const orig = proto[method];
+        proto[method] = function(...args) {
+            milanMode.registerMonster(this);
+            if (this._milanFurzKnockedDown) {
+                return; // Knocked down on the floor by Milan Furz smoke!
+            }
+            if (milanMode.isMilan) {
+                if (method.toLowerCase().includes('update') || method.toLowerCase().includes('tick') || method.toLowerCase().includes('move')) {
+                    if (args.length > 0 && typeof args[0] === 'number' && args[0] < 0.5) {
+                        args[0] = args[0] * 1.75; // 75% faster BlindFleischi in Milan mode
+                    }
+                }
+                if (method.toLowerCase().includes('hear') || method.toLowerCase().includes('sound') || method.toLowerCase().includes('noise')) {
+                    if (args.length > 1 && typeof args[1] === 'number') {
+                        args[1] = args[1] * 2.5; // 2.5x sharper hearing sensitivity in Milan mode
+                    }
+                }
+            }
+            return orig.apply(this, args);
+        };
+    }
+})();
+

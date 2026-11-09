@@ -1,3 +1,4 @@
+import { milanMode } from './MilanModeManager.js';
 export class BackroomsLogic {
     constructor(engineRef, targetDoorCount = 10) {
     if (typeof window !== 'undefined') { setTimeout(() => window.StickerSystem && window.StickerSystem.notifyLevelActive('fleischrooms', this), 350); }
@@ -26,7 +27,9 @@ export class BackroomsLogic {
 
         this.swingDoorOpen(doorObj);
 
-        if (Math.random() < 0.10 && !this.countdownActive) {
+        // Milan-Modus: deutlich höhere Chance, dass beim Türöffnen ein Fleischi spawnt
+        const spawnChance = milanMode.isMilan ? 0.40 : 0.10;
+        if (Math.random() < spawnChance && !this.countdownActive) {
             this.startCountdown(doorObj);
         }
     }
@@ -104,3 +107,38 @@ if (typeof window !== 'undefined' && typeof BackroomsLogic !== 'undefined') {
     window.StickerSystem.hookLevelClass('fleischrooms', BackroomsLogic);
   }
 }
+
+
+// [MILAN_MODE_HOOK_B3]
+
+(() => {
+    const cls = (typeof BackroomsLogic !== 'undefined') ? BackroomsLogic : null;
+    if (!cls || !cls.prototype) return;
+    const proto = cls.prototype;
+
+    for (const method of Object.getOwnPropertyNames(proto)) {
+        if (method === 'constructor' || typeof proto[method] !== 'function') continue;
+        const orig = proto[method];
+        proto[method] = function(...args) {
+            milanMode.registerLevelManager('BackroomsLogic', this);
+            if (this._milanFurzKnockedDown && (
+                method.toLowerCase().includes('monster') ||
+                method.toLowerCase().includes('enemy') ||
+                method.toLowerCase().includes('attack') ||
+                method.toLowerCase().includes('chase')
+            )) {
+                return;
+            }
+            if (milanMode.isMilan && (
+                method.toLowerCase().includes('update') ||
+                method.toLowerCase().includes('tick') ||
+                method.toLowerCase().includes('animate')
+            )) {
+                if (args.length > 0 && typeof args[0] === 'number' && args[0] < 0.5) {
+                    args[0] = args[0] * 1.65;
+                }
+            }
+            return orig.apply(this, args);
+        };
+    }
+})();

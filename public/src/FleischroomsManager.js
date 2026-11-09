@@ -1,3 +1,4 @@
+import { milanMode } from './MilanModeManager.js';
 import { ProceduralTextures } from './ProceduralTextures.js';
 import * as THREE from 'three';
 if (typeof window !== 'undefined') { window.THREE = THREE; }
@@ -440,3 +441,27 @@ if (typeof window !== 'undefined' && typeof FleischroomsManager !== 'undefined')
     window.StickerSystem.hookLevelClass('fleischrooms', FleischroomsManager);
   }
 }
+
+
+// [MILAN_MODE_HOOK]
+
+(() => {
+    const cls = (typeof FleischroomsManager !== 'undefined') ? FleischroomsManager : null;
+    if (!cls || !cls.prototype) return;
+    const proto = cls.prototype;
+
+    for (const method of Object.getOwnPropertyNames(proto)) {
+        if (method === 'constructor' || typeof proto[method] !== 'function') continue;
+        const orig = proto[method];
+        proto[method] = function(...args) {
+            milanMode.registerLevelManager('Fleischrooms', this);
+            if (milanMode.isMilan && (method.toLowerCase().includes('update') || method.toLowerCase().includes('tick'))) {
+                if (args.length > 0 && typeof args[0] === 'number' && args[0] < 0.5) {
+                    args[0] = args[0] * 1.45;
+                }
+            }
+            return orig.apply(this, args);
+        };
+    }
+})();
+

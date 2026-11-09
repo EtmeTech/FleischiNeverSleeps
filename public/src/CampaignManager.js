@@ -1,3 +1,4 @@
+import { milanMode } from './MilanModeManager.js';
 import * as THREE from 'three';
 if (typeof window !== 'undefined') { window.THREE = THREE; }
 import { ElevatorKeypad } from './Level03Elevator.js';
@@ -115,3 +116,29 @@ export class CampaignManager {
         }
     }
 }
+
+
+// [MILAN_MODE_HOOK_B4]
+
+(() => {
+    const cls = (typeof CampaignManager !== 'undefined') ? CampaignManager : null;
+    if (!cls || !cls.prototype) return;
+    const proto = cls.prototype;
+
+    for (const method of Object.getOwnPropertyNames(proto)) {
+        if (method === 'constructor' || typeof proto[method] !== 'function') continue;
+        const orig = proto[method];
+        proto[method] = function(...args) {
+            const res = orig.apply(this, args);
+            if (this.difficulty && String(this.difficulty).toLowerCase().includes('milan')) {
+                milanMode.setMilanActive(true);
+            }
+            if (this.currentLevel && typeof this.currentLevel === 'object') {
+                const lvlName = this.currentLevel.constructor ? this.currentLevel.constructor.name : 'CampaignLevel';
+                milanMode.registerLevelManager(lvlName, this.currentLevel);
+            }
+            return res;
+        };
+    }
+})();
+

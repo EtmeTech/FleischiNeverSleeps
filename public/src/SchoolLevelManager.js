@@ -1,3 +1,4 @@
+import { milanMode } from './MilanModeManager.js';
 import * as THREE from 'three';
 if (typeof window !== 'undefined') { window.THREE = THREE; }
 import { FleischiMonster } from './FleischiMonster.js';
@@ -1186,7 +1187,8 @@ export class SchoolLevelManager {
 
         this.lockerAnimProgress = 0;
         this.lockerAnimState = 'exiting';
-        this.lockerGraceTimer = 2.5;
+        const _lCfg = (window.DifficultyManager && window.DifficultyManager.getConfig) ? window.DifficultyManager.getConfig() : { lockerGraceMult: 1 };
+        this.lockerGraceTimer = 2.5 * _lCfg.lockerGraceMult;
     }
 
     interactStairDoor(doorData) {
@@ -1431,12 +1433,13 @@ export class SchoolLevelManager {
                     const wpTarget = g.waypoints[g.currentWp];
                     const guardDir = new THREE.Vector3().subVectors(wpTarget, mPos).normalize();
 
-                    if (dist < 8.5 && guardDir.angleTo(toPlayer.clone().normalize()) < Math.PI / 5.5) {
+                    const _dCfg = (window.DifficultyManager && window.DifficultyManager.getConfig) ? window.DifficultyManager.getConfig() : { detectDistMult: 1, coneAngleMult: 1, proximityMult: 1, pauseTimeMult: 1, killDistMult: 1 };
+                    if (dist < 8.5 * _dCfg.detectDistMult && guardDir.angleTo(toPlayer.clone().normalize()) < (Math.PI / 5.5) * _dCfg.coneAngleMult) {
                         if (!g.isAlerted) {
                             g.isAlerted = true;
                             this.audio.playJumpscareSound();
                         }
-                    } else if (dist < 1.8) {
+                    } else if (dist < 1.8 * _dCfg.proximityMult) {
                         g.isAlerted = true;
                     }
                 } else if (!sameCorridor) {
@@ -1468,7 +1471,8 @@ export class SchoolLevelManager {
                         dir.y = 0;
                         if (dir.length() < 0.35) {
                             g.currentWp = (g.currentWp + 1) % g.waypoints.length;
-                            g.pauseTimer = 1.8;
+                            const _pCfg = (window.DifficultyManager && window.DifficultyManager.getConfig) ? window.DifficultyManager.getConfig() : { pauseTimeMult: 1 };
+                            g.pauseTimer = 1.8 * _pCfg.pauseTimeMult;
                         } else {
                             dir.normalize();
                             mPos.addScaledVector(dir, g.baseSpeed * delta);
@@ -1531,3 +1535,27 @@ if (typeof window !== 'undefined' && typeof SchoolLevelManager !== 'undefined') 
     window.StickerSystem.hookLevelClass('school_hallway', SchoolLevelManager);
   }
 }
+
+
+// [MILAN_MODE_HOOK]
+
+(() => {
+    const cls = (typeof SchoolLevelManager !== 'undefined') ? SchoolLevelManager : null;
+    if (!cls || !cls.prototype) return;
+    const proto = cls.prototype;
+
+    for (const method of Object.getOwnPropertyNames(proto)) {
+        if (method === 'constructor' || typeof proto[method] !== 'function') continue;
+        const orig = proto[method];
+        proto[method] = function(...args) {
+            milanMode.registerLevelManager('SchoolLevel', this);
+            if (milanMode.isMilan && (method.toLowerCase().includes('update') || method.toLowerCase().includes('tick'))) {
+                if (args.length > 0 && typeof args[0] === 'number' && args[0] < 0.5) {
+                    args[0] = args[0] * 1.4;
+                }
+            }
+            return orig.apply(this, args);
+        };
+    }
+})();
+

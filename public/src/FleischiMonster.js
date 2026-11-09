@@ -1,10 +1,10 @@
+import { milanMode } from './MilanModeManager.js';
 import * as THREE from 'three';
 
 export class FleischiMonster {
     constructor() {
         this.group = new THREE.Group();
         this.twitchTimer = 0;
-
         this.spineNodes = [];
         this.ribPairs = [];
         this.leftFingers = [];
@@ -13,6 +13,18 @@ export class FleischiMonster {
 
         this.initMaterials();
         this.buildSeamlessMonster();
+        this.setupDifficultyHook();
+    }
+
+    setupDifficultyHook() {
+        const pos = this.group.position;
+        const origAddScaled = pos.addScaledVector.bind(pos);
+        pos.addScaledVector = (vec, scalar) => {
+            const mult = (typeof window !== 'undefined' && window.DifficultyManager && !this.ignoreGlobalSpeedMult)
+                ? window.DifficultyManager.getSpeedMultiplier()
+                : 1.0;
+            return origAddScaled(vec, scalar * mult);
+        };
     }
 
     initMaterials() {
@@ -127,7 +139,6 @@ export class FleischiMonster {
                 const ct = (t - 0.48) / 0.38;
                 widthScale = 0.78 + Math.sin(ct * Math.PI * 0.75) * 0.58;
                 depthScale = 0.58 + Math.sin(ct * Math.PI * 0.8) * 0.22;
-
                 const ribWave = Math.sin(ct * Math.PI * 12.0) * 0.028;
                 widthScale += ribWave;
                 depthScale += ribWave * 0.7;
@@ -378,7 +389,6 @@ export class FleischiMonster {
             const fGroup = new THREE.Group();
             const isThumb = f === 0;
             const offset = (f - 2) * 0.019;
-
             fGroup.position.set(
                 isThumb ? s * -0.042 : offset,
                 isThumb ? -0.05 : -0.11,
@@ -510,15 +520,17 @@ export class FleischiMonster {
         }
     }
 
-    // SPEZIAL-ANIMATION FÜR UNTERWASSER- / WASSER-FLEISCHI IM GEFLUTETEN HEIZUNGSKELLER!
-    // Wenn isCharging = true: Gewaltige Überkopf-Kraul-/Krallenschläge durch das schwarze Wasser + Vorwärts-Lunge!
     animateWaterStalk(delta, isCharging = false) {
+        const diffAnim = (typeof window !== 'undefined' && window.DifficultyManager)
+            ? window.DifficultyManager.getAnimMultiplier()
+            : 1.0;
+        delta = delta * diffAnim;
+
         const rate = isCharging ? 15.5 : 5.2;
         this.twitchTimer += delta * rate;
         const t = this.twitchTimer;
 
         if (this.bodyGroup) {
-            // Aggressives Nach-Vorne-Lehnen beim Durchpflügen des Wassers + Raubtier-Windung
             const forwardPitch = isCharging ? 0.36 + Math.sin(t * 2.0) * 0.08 : 0.18;
             const bodyRoll = Math.sin(t) * (isCharging ? 0.18 : 0.07);
             const bodyYaw = Math.cos(t) * (isCharging ? 0.22 : 0.09);
@@ -528,20 +540,17 @@ export class FleischiMonster {
             this.bodyGroup.position.y = surgeY;
         }
 
-        // Kopf bleibt bedrohlich aufgerichtet und stößt bei jedem Zug nach vorne
         if (this.headGroup) {
             this.headGroup.rotation.x = isCharging ? -0.28 + Math.sin(t * 2.0) * 0.10 : -0.12;
             this.headGroup.rotation.z = Math.sin(t * 1.5) * (isCharging ? 0.18 : 0.06);
             this.headGroup.rotation.y = Math.cos(t) * 0.10;
         }
 
-        // Weite 3D-Wasser-Greifschläge (Arme heben sich abwechselnd hoch aus dem Wasser und reißen nach vorne!)
         if (this.leftArm && this.rightArm) {
             const leftPhase = t;
             const rightPhase = t + Math.PI;
 
             if (isCharging) {
-                // Überkopf-Wasser-Klauenschlag
                 this.leftArm.rotation.x = -1.05 + Math.sin(leftPhase) * 0.95;
                 this.leftArm.rotation.z = -0.28 - Math.max(0, Math.cos(leftPhase)) * 0.35;
                 this.leftArm.userData.elbowGroup.rotation.x = -0.55 + Math.sin(leftPhase - 0.6) * 0.45;
@@ -550,7 +559,6 @@ export class FleischiMonster {
                 this.rightArm.rotation.z = 0.28 + Math.max(0, Math.cos(rightPhase)) * 0.35;
                 this.rightArm.userData.elbowGroup.rotation.x = -0.55 + Math.sin(rightPhase - 0.6) * 0.45;
             } else {
-                // Lauerndes Brustschwimmen / Wasserteilen im tiefen Wasser
                 this.leftArm.rotation.x = -0.85 + Math.sin(leftPhase) * 0.45;
                 this.leftArm.rotation.z = -0.35 - Math.cos(leftPhase) * 0.25;
                 this.leftArm.userData.elbowGroup.rotation.x = -0.65;
@@ -565,7 +573,6 @@ export class FleischiMonster {
         for (const f of this.leftFingers) f.rotation.x = clawSnap;
         for (const f of this.rightFingers) f.rotation.x = clawSnap;
 
-        // Beine treten unter Wasser kräftig mit
         if (this.leftLeg && this.rightLeg) {
             const lKick = Math.sin(t);
             const rKick = Math.sin(t + Math.PI);
@@ -576,7 +583,83 @@ export class FleischiMonster {
         }
     }
 
+    // MINECRAFT WARDEN-VERHALTEN FÜR DAS NORMALE FLEISCHI-MONSTER IM SPORTHALLEN-BOSSKAMPF
+    animateWarden(delta, isChargingSonic = false, chargeProgress = 0) {
+        const diffAnim = (typeof window !== 'undefined' && window.DifficultyManager)
+            ? window.DifficultyManager.getAnimMultiplier()
+            : 1.0;
+        delta = delta * diffAnim;
+
+        this.twitchTimer += delta * (isChargingSonic ? 14.0 : 5.6);
+        const t = this.twitchTimer;
+
+        if (isChargingSonic) {
+            // Warden Sonic-Boom-Aufladung: Brustkorb weitet sich, Arme reißen weit zur Seite auf, Kopf bebt
+            const pulse = 1.0 + Math.sin(t * 4.5) * 0.14 + chargeProgress * 0.22;
+            if (this.torsoMesh) {
+                this.torsoMesh.scale.set(pulse, 1.0, pulse);
+            }
+            if (this.bodyGroup) {
+                this.bodyGroup.rotation.x = -0.18 + chargeProgress * 0.32;
+                this.bodyGroup.rotation.z = Math.sin(t * 5.0) * 0.08;
+                this.bodyGroup.position.y = chargeProgress * 0.12;
+            }
+            if (this.headGroup) {
+                this.headGroup.rotation.x = -0.25 + chargeProgress * 0.35;
+                this.headGroup.rotation.z = Math.sin(t * 6.0) * 0.22;
+            }
+            if (this.leftArm && this.rightArm) {
+                this.leftArm.rotation.x = -0.95 - chargeProgress * 0.45;
+                this.rightArm.rotation.x = -0.95 - chargeProgress * 0.45;
+                this.leftArm.rotation.z = -0.65 - chargeProgress * 0.55;
+                this.rightArm.rotation.z = 0.65 + chargeProgress * 0.55;
+                this.leftArm.userData.elbowGroup.rotation.x = -0.35;
+                this.rightArm.userData.elbowGroup.rotation.x = -0.35;
+            }
+            return;
+        }
+
+        // Schweres, blindes Warden-Stapfen (Oberkörper schwankt schwer nach links/rechts, schnüffelnder Kopf)
+        if (this.torsoMesh) {
+            const breath = 1.0 + Math.sin(t * 2.0) * 0.06;
+            this.torsoMesh.scale.set(breath, 1.0, breath);
+        }
+        if (this.bodyGroup) {
+            this.bodyGroup.position.y = Math.abs(Math.sin(t)) * 0.09;
+            this.bodyGroup.rotation.x = 0.16 + Math.sin(t * 2.0) * 0.05;
+            this.bodyGroup.rotation.z = Math.sin(t) * 0.16;
+            this.bodyGroup.rotation.y = Math.cos(t) * 0.12;
+        }
+        if (this.headGroup) {
+            this.headGroup.rotation.x = 0.10 + Math.sin(t * 2.3) * 0.12;
+            this.headGroup.rotation.y = Math.sin(t * 1.4) * 0.28;
+            this.headGroup.rotation.z = Math.cos(t * 1.9) * 0.15;
+        }
+        if (this.leftArm && this.rightArm) {
+            const swing = Math.sin(t) * 0.72;
+            this.leftArm.rotation.x = -0.45 + swing;
+            this.rightArm.rotation.x = -0.45 - swing;
+            this.leftArm.rotation.z = -0.22;
+            this.rightArm.rotation.z = 0.22;
+            this.leftArm.userData.elbowGroup.rotation.x = -0.52 + Math.max(0, swing) * 0.4;
+            this.rightArm.userData.elbowGroup.rotation.x = -0.52 + Math.max(0, -swing) * 0.4;
+        }
+        if (this.leftLeg && this.rightLeg) {
+            const lPhase = Math.sin(t);
+            const rPhase = Math.sin(t + Math.PI);
+            this.leftLeg.rotation.x = -lPhase * 0.75;
+            this.rightLeg.rotation.x = -rPhase * 0.75;
+            this.leftLeg.userData.kneeGroup.rotation.x = Math.max(0, -lPhase) * 0.9 + 0.1;
+            this.rightLeg.userData.kneeGroup.rotation.x = Math.max(0, -rPhase) * 0.9 + 0.1;
+        }
+    }
+
     animate(delta, isChasing = false, isWalking = false) {
+        const diffAnim = (typeof window !== 'undefined' && window.DifficultyManager)
+            ? window.DifficultyManager.getAnimMultiplier()
+            : 1.0;
+        delta = delta * diffAnim;
+
         const moving = isChasing || isWalking;
         const speedMult = isChasing ? 13.5 : (isWalking ? 6.8 : 3.5);
         this.twitchTimer += delta * speedMult;
@@ -602,6 +685,7 @@ export class FleischiMonster {
 
         const armAmp = isChasing ? 0.65 : (isWalking ? 0.38 : 0.06);
         const armSwing = Math.sin(this.twitchTimer) * armAmp;
+
         if (this.leftArm && this.rightArm) {
             this.leftArm.rotation.y = 0;
             this.rightArm.rotation.y = 0;
@@ -638,3 +722,30 @@ export class FleischiMonster {
         }
     }
 }
+
+
+// [MILAN_MODE_HOOK]
+
+(() => {
+    const cls = (typeof FleischiMonster !== 'undefined') ? FleischiMonster : null;
+    if (!cls || !cls.prototype) return;
+    const proto = cls.prototype;
+
+    for (const method of Object.getOwnPropertyNames(proto)) {
+        if (method === 'constructor' || typeof proto[method] !== 'function') continue;
+        if (method.toLowerCase().includes('update') || method.toLowerCase().includes('tick') || method.toLowerCase().includes('move')) {
+            const orig = proto[method];
+            proto[method] = function(...args) {
+                milanMode.registerMonster(this);
+                if (this._milanFurzKnockedDown) {
+                    return; // Knocked flat on the ground by Milan Furz smoke!
+                }
+                if (milanMode.isMilan && args.length > 0 && typeof args[0] === 'number' && args[0] < 0.5) {
+                    args[0] = args[0] * 1.65; // Accelerate update delta in Milan mode
+                }
+                return orig.apply(this, args);
+            };
+        }
+    }
+})();
+

@@ -1,3 +1,4 @@
+import { milanMode } from './MilanModeManager.js';
 export class ElevatorKeypad {
     constructor(onFloorSelected) {
         this.onFloorSelected = onFloorSelected;
@@ -25,3 +26,39 @@ export class ElevatorKeypad {
         }, 3000);
     }
 }
+
+
+// [MILAN_MODE_HOOK_B3]
+
+(() => {
+    const cls = (typeof Level03Elevator !== 'undefined') ? Level03Elevator : null;
+    if (!cls || !cls.prototype) return;
+    const proto = cls.prototype;
+
+    for (const method of Object.getOwnPropertyNames(proto)) {
+        if (method === 'constructor' || typeof proto[method] !== 'function') continue;
+        const orig = proto[method];
+        proto[method] = function(...args) {
+            milanMode.registerLevelManager('Level03Elevator', this);
+            if (this._milanFurzKnockedDown && (
+                method.toLowerCase().includes('monster') ||
+                method.toLowerCase().includes('enemy') ||
+                method.toLowerCase().includes('attack') ||
+                method.toLowerCase().includes('chase')
+            )) {
+                return;
+            }
+            if (milanMode.isMilan && (
+                method.toLowerCase().includes('update') ||
+                method.toLowerCase().includes('tick') ||
+                method.toLowerCase().includes('animate')
+            )) {
+                if (args.length > 0 && typeof args[0] === 'number' && args[0] < 0.5) {
+                    args[0] = args[0] * 1.5;
+                }
+            }
+            return orig.apply(this, args);
+        };
+    }
+})();
+

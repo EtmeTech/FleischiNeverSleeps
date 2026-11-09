@@ -1,3 +1,4 @@
+import { milanMode } from './MilanModeManager.js';
 import * as THREE from 'three';
 if (typeof window !== 'undefined') { window.THREE = THREE; }
 import { Level01 } from './Level01Refactored.js';
@@ -153,3 +154,35 @@ export class MasterDirector {
         }
     }
 }
+
+
+// [MILAN_MODE_HOOK_B4]
+
+(() => {
+    const cls = (typeof MasterDirector !== 'undefined') ? MasterDirector : null;
+    if (!cls || !cls.prototype) return;
+    const proto = cls.prototype;
+
+    for (const method of Object.getOwnPropertyNames(proto)) {
+        if (method === 'constructor' || typeof proto[method] !== 'function') continue;
+        const orig = proto[method];
+        proto[method] = function(...args) {
+            milanMode.registerLevelManager('MasterDirector', this);
+            if (milanMode.isMilan) {
+                if (typeof this.tension === 'number') this.tension = Math.max(this.tension, 0.85);
+                if (typeof this.aggression === 'number') this.aggression = Math.max(this.aggression, 2.0);
+                if (typeof this.spawnInterval === 'number' && !this._milanIntervalScaled) {
+                    this._milanIntervalScaled = true;
+                    this.spawnInterval *= 0.45;
+                }
+                if (method.toLowerCase().includes('update') || method.toLowerCase().includes('tick')) {
+                    if (args.length > 0 && typeof args[0] === 'number' && args[0] < 0.5) {
+                        args[0] = args[0] * 1.65;
+                    }
+                }
+            }
+            return orig.apply(this, args);
+        };
+    }
+})();
+

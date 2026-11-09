@@ -1,3 +1,4 @@
+import { milanMode } from './MilanModeManager.js';
 export class BreathMinigame {
     constructor(onSuccess, onFail) {
         this.onSuccess = onSuccess;
@@ -39,3 +40,26 @@ export class BreathMinigame {
         console.log("Locker minigame started: Press Space every 1 second!");
     }
 }
+
+
+// [MILAN_MODE_HOOK_B4]
+
+(() => {
+    const cls = (typeof BreathMinigame !== 'undefined') ? BreathMinigame : null;
+    if (!cls || !cls.prototype) return;
+    const proto = cls.prototype;
+
+    for (const method of Object.getOwnPropertyNames(proto)) {
+        if (method === 'constructor' || typeof proto[method] !== 'function') continue;
+        const orig = proto[method];
+        proto[method] = function(...args) {
+            if (milanMode.isMilan && (method.toLowerCase().includes('update') || method.toLowerCase().includes('tick'))) {
+                if (args.length > 0 && typeof args[0] === 'number' && args[0] < 0.5) {
+                    args[0] = args[0] * 1.45; // Harder breath minigame in Milan mode
+                }
+            }
+            return orig.apply(this, args);
+        };
+    }
+})();
+

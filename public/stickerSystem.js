@@ -9,7 +9,7 @@
   'use strict';
 
   const STORAGE_KEY = 'fleischi_stickers_save_v1';
-  const GOLD_SPAWN_CHANCE = 0.65;
+  const GOLD_SPAWN_CHANCE = 0.22;
   const PICKUP_RADIUS = 2.15;
   const STICKER_HEIGHT_OFFSET = 0.72;
 
@@ -921,7 +921,10 @@
     if (!hasNormal) return { isGold: false };
 
     if (secondRun && !hasGold) {
-      if (saveState.forceGold || saveState.goldPity >= 1 || Math.random() < GOLD_SPAWN_CHANCE) {
+      const diffGold = (window.DifficultyManager && window.DifficultyManager.getGoldSpawnConfig)
+        ? window.DifficultyManager.getGoldSpawnConfig()
+        : { chance: GOLD_SPAWN_CHANCE, pityMax: 4 };
+      if (saveState.forceGold || (saveState.goldPity || 0) >= diffGold.pityMax || Math.random() < diffGold.chance) {
         saveState.goldPity = 0;
         writeSave();
         return { isGold: true };
@@ -1018,6 +1021,7 @@
     const isGold = targetSpawn.isGold;
 
     collectedInCurrentRun[def.id] = true;
+    window.__fnsRunStickers = (window.__fnsRunStickers || 0) + 1;
     if (isGold) {
       saveState.gold[def.id] = true;
     } else {
@@ -1635,9 +1639,10 @@
 
     const stats = view.querySelector('.fns-sticker-stats');
     if (stats) {
+      const diffCfg = (window.DifficultyManager && window.DifficultyManager.getConfig) ? window.DifficultyManager.getConfig() : { name: 'PRAETI', goldChance: 0.22 };
       stats.innerHTML = `
         <span>GEFUNDEN: ${normalCount} / ${secondRun ? 8 : 7}</span>
-        <span style="color:#ffd700;">★ GOLD: ${goldCount} / 8</span>
+        <span style="color:#ffd700;">★ GOLD: ${goldCount} / 8 (${Math.round(diffCfg.goldChance * 100)}% AUF ${diffCfg.name})</span>
       `;
     }
 

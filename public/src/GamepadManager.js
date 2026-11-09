@@ -1,3 +1,4 @@
+import { milanMode } from './MilanModeManager.js';
 /**
  * FleischiNeverSleeps - Xbox Controller & Gamepad Manager (v4)
  * - Fix: Single-Dispatch für [E] / A-Taste (verhindert sofortiges Wieder-Schließen des Laptops)
@@ -1162,3 +1163,28 @@
     }
   };
 })();
+
+
+// [MILAN_MODE_HOOK_B2]
+
+(() => {
+    let lastGamepadFurzPress = false;
+    setInterval(() => {
+        if (!milanMode.isMilan || !navigator.getGamepads) return;
+        const pads = navigator.getGamepads();
+        for (const pad of pads) {
+            if (!pad || !pad.connected) continue;
+            // L3 (button 10) or Back/Share (button 8) triggers Milan Furz
+            const pressed = Boolean(
+                (pad.buttons[10] && pad.buttons[10].pressed) ||
+                (pad.buttons[8] && pad.buttons[8].pressed)
+            );
+            if (pressed && !lastGamepadFurzPress) {
+                milanMode.triggerFurz();
+            }
+            lastGamepadFurzPress = pressed;
+            break;
+        }
+    }, 50);
+})();
+

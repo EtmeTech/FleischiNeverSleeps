@@ -1,3 +1,4 @@
+import { milanMode } from './MilanModeManager.js';
 import * as THREE from 'three';
 if (typeof window !== 'undefined') { window.THREE = THREE; }
 import { ProceduralTextures } from './ProceduralTextures.js';
@@ -817,3 +818,27 @@ if (typeof window !== 'undefined' && typeof HallwayManager !== 'undefined') {
     window.StickerSystem.hookLevelClass('gang', HallwayManager);
   }
 }
+
+
+// [MILAN_MODE_HOOK_B2]
+
+(() => {
+    const cls = (typeof HallwayManager !== 'undefined') ? HallwayManager : null;
+    if (!cls || !cls.prototype) return;
+    const proto = cls.prototype;
+
+    for (const method of Object.getOwnPropertyNames(proto)) {
+        if (method === 'constructor' || typeof proto[method] !== 'function') continue;
+        const orig = proto[method];
+        proto[method] = function(...args) {
+            milanMode.registerLevelManager('Hallway', this);
+            if (milanMode.isMilan && (method.toLowerCase().includes('update') || method.toLowerCase().includes('tick'))) {
+                if (args.length > 0 && typeof args[0] === 'number' && args[0] < 0.5) {
+                    args[0] = args[0] * 1.5;
+                }
+            }
+            return orig.apply(this, args);
+        };
+    }
+})();
+
