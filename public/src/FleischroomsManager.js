@@ -396,7 +396,19 @@ export class FleischroomsManager {
 
             const pPos = this.player.position;
             const mPos = this.monsterGroup.position;
-            this.monsterGroup.lookAt(pPos.x, 0, pPos.z);
+            if (window.__fnsMultiplayerActive && typeof window.__fnsIsMpAuthority === 'function' && !window.__fnsIsMpAuthority()) {
+                const horizDistClient = Math.hypot(pPos.x - mPos.x, pPos.z - mPos.z);
+                if (horizDistClient <= 1.35) {
+                    this.isMonsterChasing = false;
+                    this.audio.playJumpscareSound();
+                    if (this.onCaughtInFleischrooms) this.onCaughtInFleischrooms();
+                }
+                return;
+            }
+            const targetPos = (typeof window.__fnsGetClosestPlayerPos === 'function')
+                ? window.__fnsGetClosestPlayerPos('fleischrooms', mPos, pPos)
+                : pPos;
+            this.monsterGroup.lookAt(targetPos.x, 0, targetPos.z);
 
             const horizDist = Math.hypot(pPos.x - mPos.x, pPos.z - mPos.z);
 
@@ -418,7 +430,7 @@ export class FleischroomsManager {
 
             if (!isLookingAtMonster) {
                 this.monsterEntity.animate(delta, true);
-                const dir = new THREE.Vector3(pPos.x - mPos.x, 0, pPos.z - mPos.z).normalize();
+                const dir = new THREE.Vector3(targetPos.x - mPos.x, 0, targetPos.z - mPos.z).normalize();
                 mPos.addScaledVector(dir, this.monsterSpeed * delta);
             } else {
                 this.monsterEntity.animate(delta, false);
@@ -465,3 +477,5 @@ if (typeof window !== 'undefined' && typeof FleischroomsManager !== 'undefined')
     }
 })();
 
+
+if (typeof window !== "undefined" && typeof milanMode !== "undefined") { window.milanMode = milanMode; }

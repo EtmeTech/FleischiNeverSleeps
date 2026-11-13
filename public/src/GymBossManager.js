@@ -64,6 +64,7 @@ export class GymBossManager {
         // Deutlich reduzierter Schallwellen-Schaden + kurzer Schutz nach Treffer
         this.sonicWaveDamage = this.diffId === 'mats' ? 10 : (this.diffId === 'milan' ? 18 : 14);
         this.playerHitCooldown = 0;
+        this.spawnGraceTimer = 3.5;
 
         // Warden-Fleischi Verhalten
         this.wardenSpeed = 3.45;
@@ -1106,8 +1107,11 @@ export class GymBossManager {
             1.75,
             this.bossGroup.position.z
         );
-        const pPos = this.player.position;
-        const dir = new THREE.Vector3(pPos.x - origin.x, (pPos.y - 0.3) - origin.y, pPos.z - origin.z).normalize();
+        const rawPPos = this.player.position;
+        const pPos = (typeof window.__fnsGetClosestPlayerPos === 'function')
+            ? window.__fnsGetClosestPlayerPos('gym', origin, rawPPos)
+            : rawPPos;
+        const dir = new THREE.Vector3(pPos.x - origin.x, ((pPos.y || 1.6) - 0.3) - origin.y, pPos.z - origin.z).normalize();
 
         const waveGroup = new THREE.Group();
         waveGroup.position.copy(origin);
@@ -1189,6 +1193,7 @@ export class GymBossManager {
 
         this.bossGroup.position.set(0, 0, -34.0);
         this.playerShield = this.maxPlayerShield;
+        this.spawnGraceTimer = 3.5;
         this.isChargingSonic = false;
         this.sonicTimer = 3.2;
         this.updateBossHUD();
@@ -1222,6 +1227,7 @@ export class GymBossManager {
 
         if (this.shootCooldown > 0) this.shootCooldown -= delta;
         if (this.playerHitCooldown > 0) this.playerHitCooldown -= delta;
+        if (this.spawnGraceTimer > 0) this.spawnGraceTimer -= delta;
         if (this.muzzleFlashLight && this.muzzleFlashLight.intensity > 0) {
             this.muzzleFlashLight.intensity = Math.max(0, this.muzzleFlashLight.intensity - delta * 28.0);
         }
@@ -1291,6 +1297,9 @@ export class GymBossManager {
                 const dy = p.group.position.y - (bPos.y + 1.65);
                 if (Math.hypot(dx, dz) < 1.15 && Math.abs(dy) < 1.75) {
                     this.bossHp -= p.damage;
+                    if (typeof window !== 'undefined' && typeof window.__fnsBroadcastBossDamage === 'function') {
+                        window.__fnsBroadcastBossDamage(p.damage);
+                    }
                     this.spawnFloatingHitNumber(bPos, p.damage);
                     this.updateBossHUD();
 
@@ -1347,7 +1356,7 @@ export class GymBossManager {
 
             const distToPlayer = w.group.position.distanceTo(pPos);
             if (distToPlayer < 1.55) {
-                if (this.playerHitCooldown <= 0) {
+                if (this.playerHitCooldown <= 0 && this.spawnGraceTimer <= 0) {
                     this.playerHitCooldown = 0.65;
                     this.playerShield = Math.max(0, this.playerShield - this.sonicWaveDamage);
                     this.updateBossHUD();
@@ -1384,6 +1393,11 @@ export class GymBossManager {
             this.updateBossHUD();
         }
 
+        const isMpClient = !!(window.__fnsMultiplayerActive && typeof window.__fnsIsMpAuthority === 'function' && !window.__fnsIsMpAuthority());
+        const targetPlayerPos = (typeof window.__fnsGetClosestPlayerPos === 'function')
+            ? window.__fnsGetClosestPlayerPos('gym', bPos, pPos)
+            : pPos;
+
         this.sonicTimer -= delta;
         if (!this.isChargingSonic && this.sonicTimer <= 0) {
             this.isChargingSonic = true;
@@ -1395,7 +1409,7 @@ export class GymBossManager {
             this.sonicChargeTime += delta;
             const cProg = Math.min(1.0, this.sonicChargeTime / this.sonicChargeDuration);
             this.bossEntity.animateWarden(delta, true, cProg);
-            this.bossGroup.lookAt(pPos.x, 0, pPos.z);
+            this.bossGroup.lookAt(targetPlayerPos.x, 0, targetPlayerPos.z);
 
             this.wardenCoreMat.opacity = 0.4 + cProg * 0.6;
             this.wardenCoreMesh.scale.setScalar(1.0 + cProg * 1.6);
@@ -1411,23 +1425,31 @@ export class GymBossManager {
         } else {
             this.bossEntity.animateWarden(delta, false, 0);
 
-            const toPlayer = new THREE.Vector3(pPos.x - bPos.x, 0, pPos.z - bPos.z);
-            const dist = toPlayer.length();
-            if (dist > 0.01) {
-                toPlayer.normalize();
-                bPos.addScaledVector(toPlayer, this.wardenSpeed * delta);
-                this.bossGroup.lookAt(pPos.x, 0, pPos.z);
+            if (isMpClient && typeof window.__fnsApplyClientBoss === 'function') {
+                window.__fnsApplyClientBoss(this.bossGroup, delta);
+            } else {
+                const toTarget = new THREE.Vector3(targetPlayerPos.x - bPos.x, 0, targetPlayerPos.z - bPos.z);
+                const tDist = toTarget.length();
+                if (tDist > 0.01) {
+                    toTarget.normalize();
+                    const desiredPos = bPos.clone().addScaledVector(toTarget, this.wardenSpeed * delta);
+                    const resolvedPos = this.physics.resolveMovement(bPos, desiredPos, 0.55, 0.0);
+                    bPos.x = resolvedPos.x;
+                    bPos.z = resolvedPos.z;
+                    this.bossGroup.lookAt(targetPlayerPos.x, 0, targetPlayerPos.z);
+                }
             }
 
+            const distToLocal = Math.hypot(pPos.x - bPos.x, pPos.z - bPos.z);
             this.stepSoundTimer += delta;
             if (this.stepSoundTimer >= 0.55) {
                 this.stepSoundTimer = 0;
-                if (dist < 18.0 && this.audio && this.audio.playDoorSlam) {
+                if (distToLocal < 18.0 && this.audio && this.audio.playDoorSlam) {
                     this.audio.playDoorSlam();
                 }
             }
 
-            if (dist <= 1.55) {
+            if (this.spawnGraceTimer <= 0 && distToLocal <= 1.55) {
                 if (this.audio) this.audio.playJumpscareSound();
                 if (this.onCaughtCallback) {
                     this.onCaughtCallback(this.bossEntity, this.bossGroup);
@@ -1464,3 +1486,5 @@ export class GymBossManager {
     }
 })();
 
+
+if (typeof window !== "undefined" && typeof milanMode !== "undefined") { window.milanMode = milanMode; }

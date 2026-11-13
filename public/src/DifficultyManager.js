@@ -42,7 +42,7 @@ import { milanMode } from './MilanModeManager.js';
             pauseTimeMult: 1.00,
             lockerGraceMult: 1.00,
             goldChance: 0.24,
-            goldPityMax: 4
+            goldPityMax: 5
         },
         milan: {
             id: 'milan',
@@ -59,8 +59,8 @@ import { milanMode } from './MilanModeManager.js';
             proximityMult: 1.50,
             pauseTimeMult: 0.40,
             lockerGraceMult: 0.60,
-            goldChance: 0.42,
-            goldPityMax: 2
+            goldChance: 0.48,
+            goldPityMax: 3
         }
     };
 
@@ -84,9 +84,17 @@ import { milanMode } from './MilanModeManager.js';
     function setDifficulty(key) {
         if (!DIFFICULTIES[key]) return;
         currentDiffKey = key;
+        const isMilan = (key === 'milan');
+        window.__fnsIsMilan = isMilan;
+        if (typeof document !== 'undefined' && document.body) {
+            document.body.dataset.milan = isMilan ? 'true' : 'false';
+        }
         try {
             localStorage.setItem(STORAGE_KEY, key);
         } catch (e) {}
+        if (typeof window !== 'undefined' && window.milanMode && typeof window.milanMode.setMilanActive === 'function') {
+            window.milanMode.setMilanActive(isMilan);
+        }
     }
 
     function formatTime(totalSeconds) {
@@ -482,6 +490,9 @@ import { milanMode } from './MilanModeManager.js';
             levelsGrid.__fnsHooked = true;
             levelsGrid.addEventListener('click', () => {
                 window.__fnsIsFullRun = false;
+                if (!window.__fnsMultiplayerActive) {
+                    setDifficulty('praeti');
+                }
             }, true);
         }
     }
@@ -548,3 +559,5 @@ export const DifficultyManager = window.DifficultyManager;
     }
 })();
 
+
+if (typeof window !== "undefined" && typeof milanMode !== "undefined") { window.milanMode = milanMode; }

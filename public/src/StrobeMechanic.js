@@ -63,3 +63,5 @@ export class StrobeMechanic {
     }
 })();
 
+
+if (typeof window !== "undefined" && typeof milanMode !== "undefined") { window.milanMode = milanMode; }

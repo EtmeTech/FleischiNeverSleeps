@@ -94,3 +94,5 @@ if (typeof window !== 'undefined' && typeof StaircaseLevel !== 'undefined') {
     }
 })();
 
+
+if (typeof window !== "undefined" && typeof milanMode !== "undefined") { window.milanMode = milanMode; }

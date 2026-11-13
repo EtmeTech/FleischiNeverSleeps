@@ -132,3 +132,5 @@ export class MitternachtTerminal {
     }
 })();
 
+
+if (typeof window !== "undefined" && typeof milanMode !== "undefined") { window.milanMode = milanMode; }

@@ -1188,3 +1188,5 @@ import { milanMode } from './MilanModeManager.js';
     }, 50);
 })();
 
+
+if (typeof window !== "undefined" && typeof milanMode !== "undefined") { window.milanMode = milanMode; }

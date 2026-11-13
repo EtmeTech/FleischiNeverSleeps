@@ -65,3 +65,5 @@ export class WaterMonster {
     }
 })();
 
+
+if (typeof window !== "undefined" && typeof milanMode !== "undefined") { window.milanMode = milanMode; }

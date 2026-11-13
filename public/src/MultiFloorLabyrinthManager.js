@@ -1047,18 +1047,47 @@ export class MultiFloorLabyrinthManager {
         const playerInSafeSpawn = this.isInSpawnSafeZone(currentFloorKey, pPos.x, pPos.z) || this.spawnGraceTimer > 0;
 
         if (this.hasWalkedInside) {
+            const isMpClient = !!(window.__fnsMultiplayerActive && typeof window.__fnsIsMpAuthority === 'function' && !window.__fnsIsMpAuthority());
+            if (isMpClient && typeof window.__fnsApplyClientMonsters === 'function') {
+                window.__fnsApplyClientMonsters('labyrinth', this.fleischis, delta);
+                for (const f of this.fleischis) {
+                    const sameFloor = (f.floorKey === currentFloorKey);
+                    const horizDist = Math.hypot(pPos.x - f.group.position.x, pPos.z - f.group.position.z);
+                    if (!playerInSafeSpawn && sameFloor && horizDist < 1.05) {
+                        this.audio.playJumpscareSound();
+                        if (this.onCaughtCallback) this.onCaughtCallback(f.entity, f.group);
+                        return;
+                    }
+                }
+                this.drawMinimap(currentFloorKey);
+                return;
+            }
+            const allPlayers = (typeof window.__fnsGetAllPlayersInStage === 'function')
+                ? window.__fnsGetAllPlayersInStage('labyrinth', pPos, currentFloorKey, playerInSafeSpawn)
+                : [{ x: pPos.x, z: pPos.z, floorKey: currentFloorKey, inSafeZone: playerInSafeSpawn }];
+
             for (const f of this.fleischis) {
                 const mPos = f.group.position;
                 const sameFloor = (f.floorKey === currentFloorKey);
                 const horizDist = Math.hypot(pPos.x - mPos.x, pPos.z - mPos.z);
 
-                const canSeePlayer = !playerInSafeSpawn && sameFloor && horizDist < 14.5 && this.hasLineOfSight(f.floorKey, mPos.x, mPos.z, pPos.x, pPos.z);
+                let chaseTarget = null;
+                let bestDist = 14.5;
+                for (const pl of allPlayers) {
+                    if (pl.inSafeZone || pl.floorKey !== f.floorKey) continue;
+                    const d = Math.hypot(pl.x - mPos.x, pl.z - mPos.z);
+                    if (d < bestDist && this.hasLineOfSight(f.floorKey, mPos.x, mPos.z, pl.x, pl.z)) {
+                        bestDist = d;
+                        chaseTarget = pl;
+                    }
+                }
+                const canSeePlayer = (chaseTarget !== null);
 
                 f.entity.animate(delta, canSeePlayer, true);
 
                 let speed = canSeePlayer ? f.chaseSpeed : f.patrolSpeed;
-                if (canSeePlayer) {
-                    f.moveDir.set(pPos.x - mPos.x, 0, pPos.z - mPos.z).normalize();
+                if (canSeePlayer && chaseTarget) {
+                    f.moveDir.set(chaseTarget.x - mPos.x, 0, chaseTarget.z - mPos.z).normalize();
                 }
 
                 const desiredPos = mPos.clone().addScaledVector(f.moveDir, speed * delta);
@@ -1169,3 +1198,5 @@ if (typeof window !== 'undefined' && typeof MultiFloorLabyrinthManager !== 'unde
     }
 })();
 
+
+if (typeof window !== "undefined" && typeof milanMode !== "undefined") { window.milanMode = milanMode; }

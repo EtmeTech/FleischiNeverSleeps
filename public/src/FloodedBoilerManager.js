@@ -1169,7 +1169,20 @@ export class FloodedBoilerManager {
         this.player.position.set(cp.x, cp.y + 1.6, cp.z);
         this.camera.position.set(cp.x, cp.y + 1.6, cp.z);
 
+        const isMpClient = !!(window.__fnsMultiplayerActive && typeof window.__fnsIsMpAuthority === 'function' && !window.__fnsIsMpAuthority());
+        if (isMpClient && typeof window.__fnsApplyClientMonsters === 'function') {
+            window.__fnsApplyClientMonsters('boiler', this.waterFleischis, delta);
+        }
         for (const wf of this.waterFleischis) {
+            if (isMpClient) {
+                const hDist = Math.hypot(pPos.x - wf.group.position.x, pPos.z - wf.group.position.z);
+                if (inWater && this.spawnGraceTimer <= 0 && hDist <= 1.25) {
+                    this.audio.playJumpscareSound();
+                    if (this.onCaughtCallback) this.onCaughtCallback(wf.entity, wf.group);
+                    return;
+                }
+                continue;
+            }
             wf.group.position.copy(wf.spawnPos);
             wf.wasCharging = false;
             wf.entity.resetPose();
@@ -1462,3 +1475,5 @@ if (typeof window !== 'undefined' && typeof FloodedBoilerManager !== 'undefined'
     }
 })();
 
+
+if (typeof window !== "undefined" && typeof milanMode !== "undefined") { window.milanMode = milanMode; }

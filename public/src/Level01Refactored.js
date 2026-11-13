@@ -92,3 +92,5 @@ if (typeof window !== 'undefined' && typeof Level01 !== 'undefined') {
     }
 })();
 
+
+if (typeof window !== "undefined" && typeof milanMode !== "undefined") { window.milanMode = milanMode; }

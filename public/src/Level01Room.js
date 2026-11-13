@@ -830,3 +830,5 @@ if (typeof window !== 'undefined' && typeof Level01Room !== 'undefined') {
     }
 })();
 
+
+if (typeof window !== "undefined" && typeof milanMode !== "undefined") { window.milanMode = milanMode; }

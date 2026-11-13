@@ -4,6 +4,11 @@ import * as THREE from 'three';
 export class FleischiMonster {
     constructor() {
         this.group = new THREE.Group();
+        this.group.userData.__fnsMonsterInstance = this;
+        if (typeof window !== 'undefined') {
+            window.__fnsAllMonsters = window.__fnsAllMonsters || [];
+            window.__fnsAllMonsters.push(this);
+        }
         this.twitchTimer = 0;
         this.spineNodes = [];
         this.ribPairs = [];
@@ -655,6 +660,7 @@ export class FleischiMonster {
     }
 
     animate(delta, isChasing = false, isWalking = false) {
+        if (typeof window !== 'undefined' && window.__fnsIsMobile && this.group && !this.group.visible) return;
         const diffAnim = (typeof window !== 'undefined' && window.DifficultyManager)
             ? window.DifficultyManager.getAnimMultiplier()
             : 1.0;
@@ -749,3 +755,5 @@ export class FleischiMonster {
     }
 })();
 
+
+if (typeof window !== "undefined" && typeof milanMode !== "undefined") { window.milanMode = milanMode; }

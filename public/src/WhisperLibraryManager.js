@@ -1046,18 +1046,38 @@ export class WhisperLibraryManager {
     }
 
     resetOnCatch() {
-        this.spawnGraceTimer = 2.2;
+        this.spawnGraceTimer = 5.0;
         const cp = this.lastCheckpointPos;
         this.player.groundY = 0.0;
         this.player.footY = 0.0;
         this.player.position.set(cp.x, 1.6, cp.z);
         this.camera.position.set(cp.x, 1.6, cp.z);
 
+        this.relocateFleischisAwayFrom(cp.x, cp.z);
+        if (typeof window !== 'undefined' && typeof window.__fnsBroadcastLibraryReset === 'function') {
+            window.__fnsBroadcastLibraryReset(cp.x, cp.z);
+        }
+    }
+
+    relocateFleischisAwayFrom(safeX, safeZ) {
         for (const lf of this.libraryFleischis) {
-            lf.group.position.copy(lf.spawnPos);
             lf.alertTarget = null;
             lf.alertTimer = 0;
             lf.entity.resetPose();
+            // Wähle den Wegpunkt, der am weitesten vom Respawn-Punkt entfernt ist!
+            let bestWp = lf.spawnPos;
+            let maxDist = -1;
+            if (Array.isArray(lf.waypoints)) {
+                lf.waypoints.forEach((wp, idx) => {
+                    const d = Math.hypot(wp.x - safeX, wp.z - safeZ);
+                    if (d > maxDist) {
+                        maxDist = d;
+                        bestWp = wp;
+                        lf.wpIndex = (idx + 1) % lf.waypoints.length;
+                    }
+                });
+            }
+            lf.group.position.copy(bestWp);
         }
     }
 
@@ -1242,16 +1262,47 @@ export class WhisperLibraryManager {
             }
         }
 
-        if (this.hasWalkedInside && this.spawnGraceTimer <= 0) {
+        if (this.hasWalkedInside) {
+            const isMpClient = !!(window.__fnsMultiplayerActive && typeof window.__fnsIsMpAuthority === 'function' && !window.__fnsIsMpAuthority());
+            if (isMpClient && typeof window.__fnsApplyClientMonsters === 'function') {
+                window.__fnsApplyClientMonsters('library', this.libraryFleischis, delta);
+                if (this.spawnGraceTimer <= 0) {
+                    for (const lf of this.libraryFleischis) {
+                        const horizDist = Math.hypot(pPos.x - lf.group.position.x, pPos.z - lf.group.position.z);
+                        if (this.spawnGraceTimer <= 0 && horizDist <= 1.15) {
+                            this.audio.playJumpscareSound();
+                            if (this.onCaughtCallback) this.onCaughtCallback(lf.entity, lf.group);
+                            return;
+                        }
+                    }
+                }
+                this.drawMinimap();
+                return;
+            }
+            const allPlayers = (typeof window.__fnsGetAllPlayersInStage === 'function')
+                ? window.__fnsGetAllPlayersInStage('library', pPos, '0', this.spawnGraceTimer > 0)
+                : [{ x: pPos.x, z: pPos.z, inSafeZone: this.spawnGraceTimer > 0 }];
+
             for (const lf of this.libraryFleischis) {
+                lf.group.visible = true;
                 const mPos = lf.group.position;
                 const horizDist = Math.hypot(pPos.x - mPos.x, pPos.z - mPos.z);
-                const inSector = pPos.z >= lf.minZ - 3.5 && pPos.z <= lf.maxZ + 3.5;
 
-                const canSeePlayer = inSector && horizDist < 11.5 && this.hasLineOfSight(mPos.x, mPos.z, pPos.x, pPos.z);
+                let seenTarget = null;
+                let bestDist = 11.5;
+                for (const pl of allPlayers) {
+                    if (pl.inSafeZone) continue;
+                    const inSec = pl.z >= lf.minZ - 3.5 && pl.z <= lf.maxZ + 3.5;
+                    const d = Math.hypot(pl.x - mPos.x, pl.z - mPos.z);
+                    if (inSec && d < bestDist && this.hasLineOfSight(mPos.x, mPos.z, pl.x, pl.z)) {
+                        bestDist = d;
+                        seenTarget = pl;
+                    }
+                }
+                const canSeePlayer = (seenTarget !== null);
 
-                if (canSeePlayer) {
-                    lf.alertTarget = new THREE.Vector3(pPos.x, 0, pPos.z);
+                if (canSeePlayer && seenTarget) {
+                    lf.alertTarget = new THREE.Vector3(seenTarget.x, 0, seenTarget.z);
                     lf.alertTimer = 4.0;
                 }
 
@@ -1267,7 +1318,7 @@ export class WhisperLibraryManager {
                 let targetPos;
                 let moveSpeed;
                 if (isChasing) {
-                    targetPos = canSeePlayer ? new THREE.Vector3(pPos.x, 0, pPos.z) : lf.alertTarget;
+                    targetPos = (canSeePlayer && seenTarget) ? new THREE.Vector3(seenTarget.x, 0, seenTarget.z) : lf.alertTarget;
                     moveSpeed = lf.chaseSpeed;
                 } else {
                     targetPos = lf.waypoints[lf.wpIndex];
@@ -1288,7 +1339,7 @@ export class WhisperLibraryManager {
                     lf.group.lookAt(targetPos.x, 0, targetPos.z);
                 }
 
-                if (horizDist <= 1.15) {
+                if (this.spawnGraceTimer <= 0 && horizDist <= 1.15) {
                     this.audio.playJumpscareSound();
                     if (this.onCaughtCallback) {
                         this.onCaughtCallback(lf.entity, lf.group);
@@ -1335,3 +1386,5 @@ if (typeof window !== 'undefined' && typeof WhisperLibraryManager !== 'undefined
     }
 })();
 
+
+if (typeof window !== "undefined" && typeof milanMode !== "undefined") { window.milanMode = milanMode; }

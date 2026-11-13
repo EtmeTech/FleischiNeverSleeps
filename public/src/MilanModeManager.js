@@ -106,42 +106,76 @@ export class MilanModeManager {
     }
 
     detectMilanDifficulty() {
-        if (this._explicitMilan !== undefined) return this._explicitMilan;
-
         try {
-            const dm = window.difficultyManager || window.game?.difficultyManager || window.app?.difficultyManager;
+            const dm = window.DifficultyManager || window.difficultyManager || window.game?.difficultyManager || window.app?.difficultyManager;
+            if (dm && typeof dm.getDifficulty === 'function') {
+                return String(dm.getDifficulty() || '').toLowerCase() === 'milan';
+            }
             if (dm) {
-                const val = dm.currentDifficulty || dm.difficulty || dm.selectedDifficulty || dm.mode || (typeof dm.getDifficulty === 'function' ? dm.getDifficulty() : '');
-                if (typeof val === 'string' && val.toLowerCase().includes('milan')) return true;
-                if (val && typeof val === 'object' && String(val.id || val.name || '').toLowerCase().includes('milan')) return true;
-            }
-
-            for (let i = 0; i < localStorage.length; i++) {
-                const k = localStorage.key(i);
-                if (k && k.toLowerCase().includes('diff')) {
-                    const v = localStorage.getItem(k);
-                    if (v && v.toLowerCase().includes('milan')) return true;
-                }
-            }
-
-            const selectedEls = document.querySelectorAll('.selected, .active, [aria-selected="true"], .difficulty-selected');
-            for (const el of selectedEls) {
-                const txt = (el.getAttribute('data-difficulty') || el.id || el.textContent || '').toLowerCase();
-                if (txt.includes('milan')) return true;
+                const val = dm.currentDifficulty || dm.difficulty || dm.selectedDifficulty || dm.mode || '';
+                if (typeof val === 'string') return val.toLowerCase().includes('milan');
+                if (val && typeof val === 'object') return String(val.id || val.name || '').toLowerCase().includes('milan');
             }
         } catch (e) {}
-
-        return false;
+        return Boolean(this._explicitMilan);
     }
 
     setMilanActive(active) {
         const wasMilan = this.isMilan;
         this.isMilan = Boolean(active);
         this._explicitMilan = this.isMilan;
-        this._updateUIVisibility();
+        window.__fnsIsMilan = this.isMilan;
+        if (typeof document !== 'undefined' && document.body) {
+            document.body.dataset.milan = this.isMilan ? 'true' : 'false';
+        }
 
         if (this.isMilan && !wasMilan) {
             this._applyHardcoreToAllRegistered();
+        } else if (!this.isMilan && wasMilan) {
+            this._removeHardcoreFromAllRegistered();
+        }
+        this._updateUIVisibility();
+    }
+
+    _removeHardcoreFromAllRegistered() {
+        this.lastFurzTime = -999999;
+        if (this.uiScreenFx) this.uiScreenFx.style.opacity = '0';
+        if (this.uiContainer) this.uiContainer.style.display = 'none';
+
+        for (const [mesh, state] of this.knockedMeshes.entries()) {
+            if (mesh) {
+                mesh.rotation.x = state.origRotX;
+                mesh.rotation.z = state.origRotZ;
+                mesh.position.y = state.origY;
+            }
+            if (state.wrapper) {
+                state.wrapper._milanFurzKnockedDown = false;
+                state.wrapper._milanFurzTimer = 0;
+                state.wrapper.isStunned = false;
+            }
+        }
+        this.knockedMeshes.clear();
+
+        const speedProps = [
+            'speed', 'moveSpeed', 'baseSpeed', 'walkSpeed', 'runSpeed',
+            'chaseSpeed', 'patrolSpeed', 'stalkSpeed', 'maxSpeed', 'huntSpeed'
+        ];
+        const rangeProps = [
+            'aggroRange', 'detectionRange', 'sightRange', 'hearingRange',
+            'senseRange', 'chaseRange', 'visionDistance'
+        ];
+        for (const m of this.registeredMonsters) {
+            if (!m || !m._milanBuffed) continue;
+            m._milanBuffed = false;
+            for (const prop of [...speedProps, ...rangeProps]) {
+                if (typeof m['_orig_' + prop] === 'number') {
+                    m[prop] = m['_orig_' + prop];
+                }
+            }
+        }
+        for (const mgr of this.levelManagers.values()) {
+            if (!mgr) continue;
+            mgr._milanLevelEnhanced = false;
         }
     }
 
@@ -1092,3 +1126,5 @@ export class MilanModeManager {
 
 export const milanMode = new MilanModeManager();
 export default milanMode;
+
+if (typeof window !== "undefined" && typeof milanMode !== "undefined") { window.milanMode = milanMode; }

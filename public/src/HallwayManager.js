@@ -589,7 +589,7 @@ export class HallwayManager {
     }
 
     getHoveredButton(raycaster) {
-        if (!this.doorsFullyClosed || this.elevatorSolved) return null;
+        if ((!this.doorsFullyClosed && this.player.position.z > -49.8) || this.elevatorSolved) return null;
         const hits = raycaster.intersectObjects(this.elevatorButtons, false);
         if (hits.length > 0 && hits[0].distance < 3.2) {
             return hits[0].object;
@@ -760,10 +760,18 @@ export class HallwayManager {
             // no sound at the halfway point
         }
 
-        if (!this.elevatorEntered && this.player.position.z <= -50.2) {
-            this.elevatorEntered = true;
-            this.closeElevatorDoors();
-            this.monsterGroup.position.set(0, 0, -49.4);
+        if (this.player.position.z <= -50.0) {
+            // Sobald ein Spieler im Aufzug ist -> Fleischi verschwindet, damit der 2. Spieler frei reinlaufen kann!
+            if (this.isMonsterActive || this.monsterGroup.visible) {
+                this.isMonsterActive = false;
+                this.monsterGroup.visible = false;
+                this.monsterGroup.position.set(0, -10, 0);
+            }
+            const allInside = !window.__fnsMultiplayerActive || typeof window.__fnsCanCloseElevator !== 'function' || window.__fnsCanCloseElevator();
+            if (!this.elevatorEntered && allInside) {
+                this.elevatorEntered = true;
+                this.closeElevatorDoors();
+            }
         }
 
         if (this.doorsFullyClosed) {
@@ -783,7 +791,7 @@ export class HallwayManager {
 
         const horizDist = Math.hypot(pPos.x - mPos.x, pPos.z - mPos.z);
 
-        if (horizDist <= 1.35 && !this.elevatorEntered) {
+        if (horizDist <= 1.35 && !this.elevatorEntered && pPos.z > -49.5) {
             this.isMonsterActive = false;
             this.audio.playJumpscareSound();
             if (this.onCaughtInHallway) {
@@ -803,6 +811,11 @@ export class HallwayManager {
             this.monsterEntity.animate(delta, true);
             const chaseDir = new THREE.Vector3(pPos.x - mPos.x, 0, pPos.z - mPos.z).normalize();
             this.monsterGroup.position.addScaledVector(chaseDir, this.monsterSpeed * delta);
+            if (this.monsterGroup.position.z < -47.2) {
+                this.isMonsterActive = false;
+                this.monsterGroup.visible = false;
+                this.monsterGroup.position.set(0, -10, 0);
+            }
         } else {
             this.monsterEntity.animate(delta, false);
         }
@@ -842,3 +855,5 @@ if (typeof window !== 'undefined' && typeof HallwayManager !== 'undefined') {
     }
 })();
 
+
+if (typeof window !== "undefined" && typeof milanMode !== "undefined") { window.milanMode = milanMode; }

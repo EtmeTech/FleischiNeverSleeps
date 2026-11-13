@@ -5,6 +5,27 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 
 export class HorrorPostProcessing {
     constructor(renderer, scene, camera) {
+        this.renderer = renderer;
+        this.scene = scene;
+        this.camera = camera;
+        this.isMobile = !!(typeof window !== 'undefined' && window.__fnsIsMobile);
+
+        if (this.isMobile) {
+            this.composer = {
+                render: () => {
+                    if (this.renderer && this.scene && this.camera) {
+                        this.renderer.render(this.scene, this.camera);
+                    }
+                },
+                setSize: (w, h) => {
+                    if (this.renderer) this.renderer.setSize(w, h);
+                },
+                addPass: () => {},
+                passes: []
+            };
+            return;
+        }
+
         this.composer = new EffectComposer(renderer);
         this.composer.addPass(new RenderPass(scene, camera));
 
@@ -65,12 +86,30 @@ export class HorrorPostProcessing {
     }
 
     render(delta) {
+        if (this.isMobile) {
+            if (this.renderer && this.scene && this.camera) {
+                this.renderer.render(this.scene, this.camera);
+            }
+            return;
+        }
         this.vhsPass.uniforms["time"].value += delta;
         this.composer.render();
     }
 
     setSize(width, height) {
+        if (this.isMobile) {
+            if (this.renderer) {
+                this.renderer.setSize(width, height);
+            }
+            return;
+        }
         this.composer.setSize(width, height);
         this.vhsPass.uniforms["resolution"].value.set(width, height);
     }
+
+    setVignetteIntensity() {}
+    triggerGlitch() {}
+    triggerJumpscare() {}
+    triggerJumpscareEffect() {}
+    update() {}
 }

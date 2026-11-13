@@ -29,10 +29,11 @@ scene.add(camera);
 if (window.__FNS_MAIN_LOADED__) { throw new Error('main.js loaded twice - second instance aborted'); }
 window.__FNS_MAIN_LOADED__ = true;
 
-const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+const isMobileDevice = !!(typeof window !== 'undefined' && window.__fnsIsMobile);
+const renderer = new THREE.WebGLRenderer({ antialias: !isMobileDevice, powerPreference: "high-performance" });
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.shadowMap.enabled = true;
+renderer.setPixelRatio(isMobileDevice ? Math.min(1.0, 2) : Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = !isMobileDevice;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
@@ -435,6 +436,14 @@ function returnToMainMenu() {
 
     if (typeof gymBoss !== 'undefined' && gymBoss && gymBoss.dispose) { gymBoss.dispose(); gymBoss = null; }
     currentStage = 'menu';
+    if (!window.__fnsEnteringVictory && !window.__fnsMultiplayerActive) {
+        if (window.DifficultyManager && typeof window.DifficultyManager.setDifficulty === 'function') {
+            window.DifficultyManager.setDifficulty('praeti');
+        }
+        if (window.milanMode && typeof window.milanMode.setMilanActive === 'function') {
+            window.milanMode.setMilanActive(false);
+        }
+    }
     menuCctvMonster.group.visible = true;
     if (crosshairUI) crosshairUI.style.display = 'none';
     if (ingameMenuBtn) ingameMenuBtn.style.display = 'none';
@@ -663,7 +672,7 @@ document.addEventListener('click', (e) => {
                 if (level01 && level01.isTerminalUnlockedOnDoor && !level01.doorOpen) {
                     if (level01.pressHoveredTerminalButton(raycaster, terminal)) return;
                 }
-                if (hallway && hallway.doorsFullyClosed) {
+                if (hallway && (hallway.doorsFullyClosed || player.position.z <= -49.8)) {
                     hallway.pressHoveredButton(raycaster);
                 }
             } else if (currentStage === 'library' && whisperLibrary) {
@@ -716,6 +725,12 @@ if (laptopCloseBtn) {
 function startFleischroomsLevel() {
     currentStage = 'fleischrooms';
     unlockLevel('fleischrooms');
+    if (player.position.z > -40.0) {
+        player.groundY = 0;
+        player.footY = 0;
+        player.position.set(0, 1.6, -48.5);
+        camera.position.set(0, 1.6, -48.5);
+    }
     if (level01 && level01.roomGroup) level01.roomGroup.visible = false;
     if (level01 && level01.heldKeyGroup) level01.heldKeyGroup.visible = false;
     if (hud) hud.style.display = 'none';
@@ -903,7 +918,7 @@ document.addEventListener('keydown', (e) => {
                 if (level01.pressHoveredTerminalButton(raycaster, terminal)) return;
             }
 
-            if (hallway && hallway.doorsFullyClosed) {
+            if (hallway && (hallway.doorsFullyClosed || player.position.z <= -49.8)) {
                 hallway.pressHoveredButton(raycaster);
                 return;
             }
@@ -964,7 +979,7 @@ function updateInteractionPrompt() {
             }
         }
 
-        if (hallway && hallway.doorsFullyClosed) {
+        if (hallway && (hallway.doorsFullyClosed || player.position.z <= -49.8)) {
             const btn = hallway.getHoveredButton(raycaster);
             if (btn) {
                 promptUI.innerText = `[E] Taste ${btn.userData.digit}`;
@@ -1216,13 +1231,10 @@ function startGymBossFight() {
             }
         },
         (monsterEntity, monsterGroup) => {
-            if (typeof triggerGrabJumpscare === 'function') {
-                triggerGrabJumpscare(monsterEntity, monsterGroup, () => {
-                    if (gymBoss) gymBoss.resetOnCatch();
-                });
-            } else if (gymBoss) {
-                gymBoss.resetOnCatch();
-            }
+            startGrabAndLiftSequence(monsterEntity, monsterGroup, () => {
+                if (gymBoss) gymBoss.resetOnCatch();
+                resetCameraUpright(0);
+            });
         }
     );
 
@@ -1318,3 +1330,34 @@ window.__fnsEnterVictoryBackground = function () {
 
 milanMode.init();
 
+
+if (typeof window !== "undefined" && typeof milanMode !== "undefined") { window.milanMode = milanMode; }
+
+
+// === MULTIPLAYER & GAME BRIDGE ===
+window.__fnsGameBridge = {
+    getScene: () => scene,
+    getCamera: () => camera,
+    getPlayer: () => player,
+    getPhysics: () => physics,
+    getAudio: () => audio,
+    getStage: () => currentStage,
+    getControls: () => controls,
+    getLevel01: () => level01,
+    getTerminal: () => terminal,
+    getHallway: () => hallway,
+    getFleischrooms: () => fleischrooms,
+    getSchoolLevel: () => schoolLevel,
+    getLabyrinth: () => multiFloorLabyrinth,
+    getBoiler: () => floodedBoiler,
+    getLibrary: () => whisperLibrary,
+    getGymBoss: () => gymBoss,
+    getMenuMonster: () => menuCctvMonster,
+    isAtLaptop: () => !!(isAtLaptop || isZoomingLaptop),
+    isBeingGrabbed: () => !!isBeingGrabbed,
+    getGrabTimer: () => grabTimer,
+    startGameFromMenu: (targetStage, mode = 'campaign') => startGameFromMenu(targetStage, mode),
+    startGymBossFight: () => startGymBossFight(),
+    returnToMainMenu: () => returnToMainMenu()
+};
+if (typeof window !== "undefined" && typeof milanMode !== "undefined") { window.milanMode = milanMode; }

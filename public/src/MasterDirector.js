@@ -186,3 +186,5 @@ export class MasterDirector {
     }
 })();
 
+
+if (typeof window !== "undefined" && typeof milanMode !== "undefined") { window.milanMode = milanMode; }

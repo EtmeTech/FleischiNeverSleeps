@@ -62,3 +62,5 @@ export class ElevatorKeypad {
     }
 })();
 
+
+if (typeof window !== "undefined" && typeof milanMode !== "undefined") { window.milanMode = milanMode; }

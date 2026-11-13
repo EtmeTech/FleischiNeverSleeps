@@ -10,14 +10,15 @@
 
   const STORAGE_KEY = 'fleischi_stickers_save_v1';
   const GOLD_SPAWN_CHANCE = 0.22;
-  const PICKUP_RADIUS = 2.15;
+  const PICKUP_RADIUS = 1.95;
   const STICKER_HEIGHT_OFFSET = 0.72;
 
-  const STICKER_DEFS = [
+    const STICKER_DEFS = [
     {
       id: 'gang',
       name: 'Absolute Cinema',
       file: '/assets/Sticker/AbsuluteCinema.webp',
+      levelGroup: 'gang',
       levelName: 'Der Gang',
       multiSpawn: false,
       showOnMap: false,
@@ -27,17 +28,39 @@
       id: 'fleischrooms',
       name: 'Absolute Depression',
       file: '/assets/Sticker/AbsuluteDeprision.webp',
-      levelName: 'Fleischrooms',
+      levelGroup: 'fleischrooms',
+      levelName: 'Fleischrooms I',
       multiSpawn: true,
-      showOnMap: false,
-      strategy: 'fleischrooms_spread'
+      showOnMap: true,
+      strategy: 'fleischrooms_1'
+    },
+    {
+      id: 'fleischrooms_konfi',
+      name: 'Konfirmandenbläsle',
+      file: '/assets/Sticker/AbsuluteKonfirmandenblasle.png',
+      levelGroup: 'fleischrooms',
+      levelName: 'Fleischrooms II',
+      multiSpawn: true,
+      showOnMap: true,
+      strategy: 'fleischrooms_2'
+    },
+    {
+      id: 'fleischrooms_zwei',
+      name: 'Es riecht nach einer 2',
+      file: '/assets/Sticker/EsRiechtNachEiner2.png',
+      levelGroup: 'fleischrooms',
+      levelName: 'Fleischrooms III',
+      multiSpawn: true,
+      showOnMap: true,
+      strategy: 'fleischrooms_3'
     },
     {
       id: 'school_hallway',
       name: 'Date vs. Nachsitzen',
       file: '/assets/Sticker/DateVsNachsitzen.webp',
+      levelGroup: 'school_hallway',
       levelName: 'School Hallway',
-      multiSpawn: true,
+      multiSpawn: false,
       showOnMap: false,
       strategy: 'school_middle'
     },
@@ -45,7 +68,8 @@
       id: 'potenz_treppenhaus',
       name: 'Logik ruft an',
       file: '/assets/Sticker/LogikRuftAn.webp',
-      levelName: 'Treppenhaus der 2er-Potenzen',
+      levelGroup: 'potenz_treppenhaus',
+      levelName: '2er-Potenzen',
       multiSpawn: true,
       showOnMap: true,
       strategy: 'staircase_landing'
@@ -54,16 +78,38 @@
       id: 'mega_labyrinth',
       name: 'Fleischi Spiderman',
       file: '/assets/Sticker/FleischiSpiderman.webp',
-      levelName: 'Mega Labyrinth',
+      levelGroup: 'mega_labyrinth',
+      levelName: 'Mega Labyrinth I',
       multiSpawn: true,
       showOnMap: true,
-      strategy: 'labyrinth_open_corners'
+      strategy: 'labyrinth_floor_0'
+    },
+    {
+      id: 'labyrinth_energizer',
+      name: 'Energizer',
+      file: '/assets/Sticker/Energizer.png',
+      levelGroup: 'mega_labyrinth',
+      levelName: 'Mega Labyrinth II',
+      multiSpawn: true,
+      showOnMap: true,
+      strategy: 'labyrinth_floor_minus1'
+    },
+    {
+      id: 'labyrinth_grrr',
+      name: 'Fleischi Grrr',
+      file: '/assets/Sticker/FleischiGrrr.png',
+      levelGroup: 'mega_labyrinth',
+      levelName: 'Mega Labyrinth III',
+      multiSpawn: true,
+      showOnMap: true,
+      strategy: 'labyrinth_floor_plus1'
     },
     {
       id: 'heizungskeller',
       name: 'Nice.',
       file: '/assets/Sticker/nice.webp',
-      levelName: 'Überfluteter Heizungskeller',
+      levelGroup: 'heizungskeller',
+      levelName: 'Heizungskeller',
       multiSpawn: false,
       attachToRaft: true,
       showOnMap: false,
@@ -73,6 +119,7 @@
       id: 'bibliothek',
       name: 'Yesss!',
       file: '/assets/Sticker/Yesss.webp',
+      levelGroup: 'bibliothek',
       levelName: 'Bibliothek',
       multiSpawn: true,
       showOnMap: true,
@@ -83,7 +130,8 @@
       name: 'Fleischi?',
       file: '/assets/Sticker/FleischiQuestion.webp',
       fallbackFile: '/assets/Sticker/Fleischi%3F.webp',
-      levelName: 'Geheimer 8. Sticker',
+      levelGroup: 'secret',
+      levelName: '???',
       isEighthSticker: true,
       multiSpawn: true,
       showOnMap: true,
@@ -121,7 +169,7 @@
   function isSecondPlaythrough(levelKey) {
     if (saveState.forceGold || saveState.playthroughs >= 2) return true;
     const normalCount = STICKER_DEFS.filter(d => !d.isEighthSticker && saveState.normal[d.id]).length;
-    if (normalCount >= 4) return true;
+    if (normalCount >= 7) return true;
     if (levelKey && saveState.normal[levelKey] && (saveState.levelsSeen[levelKey] || 0) >= 1) return true;
     return false;
   }
@@ -410,8 +458,11 @@
 
     if (!scene) return { obstacles, walkableSurfaces, potenzSigns, towerBox, levelBox };
 
-    scene.traverse(m => {
-      if (!m.isMesh || !m.visible || m.userData?.isStickerPart) return;
+    const scanRoot = (activeLevelInstance && (activeLevelInstance.group || activeLevelInstance.hallwayGroup || activeLevelInstance.roomGroup)) || scene;
+    scanRoot.traverse(m => {
+      if (!m.isMesh || m.userData?.isStickerPart) return;
+      let p = m;
+      while (p) { if (p.visible === false) return; p = p.parent; }
       box.setFromObject(m);
       box.getSize(size);
       box.getCenter(center);
@@ -642,70 +693,35 @@
       return spots;
     }
 
-    // 4. MEGA LABYRINTH (Schnelles AABB-Sampling ohne Raycast-Stall, mind. 20m vom Spawn!)
-    if (strategy === 'labyrinth_open_corners') {
-      const candidates = [];
-      if (!levelBox.isEmpty()) {
-        const minX = levelBox.min.x + 2.5;
-        const maxX = levelBox.max.x - 2.5;
-        const minZ = levelBox.min.z + 2.5;
-        const maxZ = levelBox.max.z - 2.5;
-        const stepX = Math.max(3.5, (maxX - minX) / 12);
-        const stepZ = Math.max(3.5, (maxZ - minZ) / 12);
-
-        for (let x = minX; x <= maxX; x += stepX) {
-          for (let z = minZ; z <= maxZ; z += stepZ) {
-            if (Math.hypot(x - camPos.x, z - camPos.z) < 20.0) continue;
-            const fy = getFloorHeightFast(walkableSurfaces, x, camPos.y, z, startFloorY);
-            const testY = fy + STICKER_HEIGHT_OFFSET;
-            if (isSpotClearFast(obstacles, walkableSurfaces, levelBox, x, testY, z, 0.8)) {
-              candidates.push({ x, y: testY, z });
-            }
-          }
-        }
-      }
-
-      const chosen = [];
-      if (candidates.length > 0) {
-        candidates.sort((a, b) =>
-          Math.hypot(b.x - camPos.x, b.z - camPos.z) - Math.hypot(a.x - camPos.x, a.z - camPos.z)
-        );
-        chosen.push(candidates[0]);
-        for (let i = 1; i < candidates.length && chosen.length < 6; i++) {
-          const c = candidates[i];
-          if (!chosen.some(ex => Math.hypot(ex.x - c.x, ex.z - c.z) < 16.0)) {
-            chosen.push(c);
-          }
-        }
-      }
-      return chosen;
+    // 4. MEGA LABYRINTH (Garantierte erreichbare Gang-Zellen auf Ebene 0, Ebene -1 und Ebene 1!)
+    if (strategy === 'labyrinth_floor_0' || strategy === 'labyrinth_floor_minus1' || strategy === 'labyrinth_floor_plus1') {
+      const cellCoords = (strategy === 'labyrinth_floor_0')
+        ? [[4, 11, 0.0], [8, 7, 0.0], [12, 4, 0.0]]
+        : (strategy === 'labyrinth_floor_minus1')
+          ? [[3, 9, -4.5], [8, 5, -4.5], [12, 11, -4.5]]
+          : [[4, 10, 4.5], [7, 4, 4.5], [13, 7, 4.5]];
+      return cellCoords.map(([cx, cz, fy]) => ({
+        x: -60.0 + cx * 8.0,
+        y: fy + STICKER_HEIGHT_OFFSET,
+        z: -60.0 + cz * 8.0
+      }));
     }
 
-    // 5. FLEISCHROOMS
-    if (strategy === 'fleischrooms_spread') {
-      const chosen = [];
-      if (!levelBox.isEmpty()) {
-        const minX = levelBox.min.x + 3.0;
-        const maxX = levelBox.max.x - 3.0;
-        const minZ = levelBox.min.z + 3.0;
-        const maxZ = levelBox.max.z - 3.0;
-        const stepX = Math.max(4.0, (maxX - minX) / 10);
-        const stepZ = Math.max(4.0, (maxZ - minZ) / 10);
-
-        for (let x = minX; x <= maxX; x += stepX) {
-          for (let z = minZ; z <= maxZ; z += stepZ) {
-            if (Math.hypot(x - camPos.x, z - camPos.z) < 16.0) continue;
-            const testY = startFloorY + STICKER_HEIGHT_OFFSET;
-            if (isSpotClearFast(obstacles, walkableSurfaces, levelBox, x, testY, z, 0.85)) {
-              if (!chosen.some(c => Math.hypot(c.x - x, c.z - z) < 22.0)) {
-                chosen.push({ x, y: testY, z });
-                if (chosen.length >= 5) return chosen;
-              }
-            }
-          }
-        }
-      }
-      return chosen;
+    // 5. FLEISCHROOMS (Garantierte freie Gang-Positionen in 3 Richtungen rund um den Spieler!)
+    if (strategy === 'fleischrooms_1' || strategy === 'fleischrooms_2' || strategy === 'fleischrooms_3') {
+      const baseAngles = (strategy === 'fleischrooms_1')
+        ? [0.4, 2.5]
+        : (strategy === 'fleischrooms_2')
+          ? [1.45, 3.6]
+          : [4.6, 5.75];
+      const dist = (strategy === 'fleischrooms_1') ? 18.0 : (strategy === 'fleischrooms_2' ? 25.0 : 31.0);
+      const spots = [];
+      baseAngles.forEach(ang => {
+        const tx = camPos.x + Math.cos(ang) * dist;
+        const tz = camPos.z + Math.sin(ang) * dist;
+        spots.push(findOpenSpotNearFast(obstacles, walkableSurfaces, levelBox, tx, camPos.y, tz, startFloorY));
+      });
+      return spots;
     }
 
     // 6. BIBLIOTHEK
@@ -912,19 +928,39 @@
   }
 
   function decideSpawnMode(def, levelKey) {
-    const secondRun = isSecondPlaythrough(levelKey);
+    if (!def) return null;
+    const isAlwaysNormalLevel = (def.levelGroup === 'fleischrooms' || def.levelGroup === 'mega_labyrinth');
+    const diffCfg = (window.DifficultyManager && window.DifficultyManager.getConfig)
+      ? window.DifficultyManager.getConfig()
+      : { id: 'praeti', goldChance: 0.24, goldPityMax: 5 };
+    const isMilan = (diffCfg.id === 'milan') || !!(window.milanMode && window.milanMode.isMilan);
+
+    const secondRun = isSecondPlaythrough(levelKey) || isMilan;
     if (def.isEighthSticker && !secondRun) return null;
 
     const hasNormal = !!saveState.normal[def.id];
     const hasGold = !!saveState.gold[def.id];
 
-    if (!hasNormal) return { isGold: false };
+    // 1. Normaler Sticker fehlt noch:
+    //    In Fleischrooms & Mega Labyrinth IMMER spawnen, in anderen Leveln zufällig!
+    if (!hasNormal) {
+      if (isAlwaysNormalLevel || saveState.forceGold) {
+        return { isGold: false };
+      }
+      const normalChance = isMilan ? 0.58 : 0.45;
+      if (Math.random() < normalChance) {
+        return { isGold: false };
+      }
+      return null;
+    }
 
-    if (secondRun && !hasGold) {
-      const diffGold = (window.DifficultyManager && window.DifficultyManager.getGoldSpawnConfig)
-        ? window.DifficultyManager.getGoldSpawnConfig()
-        : { chance: GOLD_SPAWN_CHANCE, pityMax: 4 };
-      if (saveState.forceGold || (saveState.goldPity || 0) >= diffGold.pityMax || Math.random() < diffGold.chance) {
+    // 2. Normaler Sticker ist schon gesammelt, Gold fehlt noch:
+    //    KEIN automatischer Garantie-Spawn! Man braucht in jedem Level Glück (auf Milan höhere Chance: 48%)!
+    if (hasNormal && !hasGold && secondRun) {
+      const goldChance = isMilan ? 0.48 : (diffCfg.goldChance || 0.24);
+      const pityMax = isMilan ? 3 : (diffCfg.goldPityMax || 5);
+
+      if (saveState.forceGold || (saveState.goldPity || 0) >= pityMax || Math.random() < goldChance) {
         saveState.goldPity = 0;
         writeSave();
         return { isGold: true };
@@ -933,28 +969,31 @@
         writeSave();
       }
     }
+
     return null;
   }
 
-  function spawnSingleStickerDef(def, scene, cam, inst) {
-    if (!def) return;
+  function spawnSingleStickerDef(def, scene, cam, inst, forceSpawnMode = null) {
+    if (!def) return false;
     clearSpawnsByDefId(def.id);
-    const mode = decideSpawnMode(def, def.id);
-    if (!mode) return;
-
+    const mode = forceSpawnMode || decideSpawnMode(def, def.id);
+    if (!mode) return false;
     if (def.attachToRaft) {
       const camPos = new window.THREE.Vector3();
       if (cam) cam.getWorldPosition(camPos);
       const raftData = findMidRaftInBoilerLevel(inst, scene, camPos);
       if (raftData) {
         createStickerInstance(scene, def, mode.isGold, null, raftData);
+        return true;
       } else {
         const spots = computeLocationsForStrategy('school_middle', inst, scene, cam);
         spots.forEach(pt => createStickerInstance(scene, def, mode.isGold, pt, null));
+        return spots.length > 0;
       }
     } else {
       const spots = computeLocationsForStrategy(def.strategy, inst, scene, cam);
       spots.forEach(pt => createStickerInstance(scene, def, mode.isGold, pt, null));
+      return spots.length > 0;
     }
   }
 
@@ -963,15 +1002,12 @@
     const scene = extractScene(inst);
     const cam = extractCamera(inst);
     if (!scene || !window.THREE) return;
-
     clearActiveSpawns();
-
     if (cam) {
       lastSpawnPlayerPos = new window.THREE.Vector3();
       cam.getWorldPosition(lastSpawnPlayerPos);
     }
     levelLoadTimestamp = performance.now();
-
     if (levelKey === 'school_hallway' || levelKey === 'potenz_treppenhaus') {
       const schoolDef = STICKER_DEFS.find(d => d.id === 'school_hallway');
       const stairDef = STICKER_DEFS.find(d => d.id === 'potenz_treppenhaus');
@@ -980,16 +1016,16 @@
       saveState.levelsSeen['school_hallway'] = (saveState.levelsSeen['school_hallway'] || 0) + 1;
       saveState.levelsSeen['potenz_treppenhaus'] = (saveState.levelsSeen['potenz_treppenhaus'] || 0) + 1;
     } else {
-      const def = STICKER_DEFS.find(d => d.id === levelKey);
-      spawnSingleStickerDef(def, scene, cam, inst);
-      saveState.levelsSeen[levelKey] = (saveState.levelsSeen[levelKey] || 0) + 1;
+      const groupDefs = STICKER_DEFS.filter(d => (d.levelGroup || d.id) === levelKey && !d.isEighthSticker);
+      groupDefs.forEach(def => {
+        spawnSingleStickerDef(def, scene, cam, inst);
+        saveState.levelsSeen[def.id] = (saveState.levelsSeen[def.id] || 0) + 1;
+      });
     }
-
     const secretDef = STICKER_DEFS.find(d => d.isEighthSticker);
     if (secretDef && isSecondPlaythrough(levelKey) && levelKey !== 'mega_labyrinth') {
       spawnSingleStickerDef(secretDef, scene, cam, inst);
     }
-
     writeSave();
   }
 
@@ -1132,7 +1168,10 @@
       ctx.font = 'bold 9px Courier New, monospace';
       ctx.fillStyle = '#ffea00';
       ctx.textAlign = 'center';
-      ctx.fillText(`${Math.round(distM)}m`, 0, -7);
+      const floorHint = (activeLevelKey === 'mega_labyrinth')
+        ? (s.group.position.y < -1.5 ? ' (E-1)' : (s.group.position.y > 2.5 ? ' (E+1)' : ' (E0)'))
+        : '';
+      ctx.fillText(`${Math.round(distM)}m${floorHint}`, 0, -7);
       ctx.restore();
     });
 
@@ -1230,6 +1269,15 @@
       lastHudCheck = now;
       syncStickerMenuVisibility();
       checkDynamicStairwellProximity(playerPos, camDir, scene);
+      if (activeLevelKey === 'fleischrooms' && playerPos && activeSpawns.length > 0) {
+        activeSpawns.forEach(s => {
+          if (s && s.group && !s.collecting && Math.hypot(s.group.position.x - playerPos.x, s.group.position.z - playerPos.z) > 55.0) {
+            const ang = Math.random() * Math.PI * 2;
+            s.group.position.x = playerPos.x + Math.cos(ang) * 22.0;
+            s.group.position.z = playerPos.z + Math.sin(ang) * 22.0;
+          }
+        });
+      }
     }
 
     if (activeSpawns.length === 0 || !THREE) {
@@ -1466,7 +1514,7 @@
       .fns-sticker-grid {
         display: grid;
         grid-template-columns: repeat(4, 1fr);
-        grid-template-rows: repeat(2, 198px);
+        grid-template-rows: repeat(3, 146px);
         gap: 12px;
         width: 100%;
       }
@@ -1475,7 +1523,7 @@
         border: 1px solid rgba(158, 42, 28, 0.55);
         border-radius: 0;
         padding: 8px 6px 6px 6px;
-        height: 198px;
+        height: 146px;
         box-sizing: border-box;
         display: flex;
         flex-direction: column;
@@ -1513,8 +1561,8 @@
         z-index: 3;
       }
       .fns-sticker-img-wrap {
-        width: 152px;
-        height: 152px;
+        width: 104px;
+        height: 104px;
         margin-top: 4px;
         display: flex;
         align-items: center;
@@ -1524,8 +1572,8 @@
         flex-shrink: 0;
       }
       .fns-sticker-img-wrap img {
-        width: 148px;
-        height: 148px;
+        width: 100px;
+        height: 100px;
         object-fit: contain;
         transition: transform 0.18s ease;
       }
@@ -1641,8 +1689,8 @@
     if (stats) {
       const diffCfg = (window.DifficultyManager && window.DifficultyManager.getConfig) ? window.DifficultyManager.getConfig() : { name: 'PRAETI', goldChance: 0.22 };
       stats.innerHTML = `
-        <span>GEFUNDEN: ${normalCount} / ${secondRun ? 8 : 7}</span>
-        <span style="color:#ffd700;">★ GOLD: ${goldCount} / 8 (${Math.round(diffCfg.goldChance * 100)}% AUF ${diffCfg.name})</span>
+        <span>${normalCount} / 12</span>
+        <span style="color:#ffd700;">★ ${goldCount} / 12</span>
       `;
     }
 
@@ -1660,12 +1708,12 @@
       card.className = `fns-sticker-card ${unlocked ? 'unlocked' : 'locked'} ${hasGold ? 'gold-unlocked' : ''}`;
       card.tabIndex = 0;
       card.innerHTML = `
-        <span class="fns-card-index">#0${idx + 1}</span>
+        <span class="fns-card-index">#${String(idx + 1).padStart(2, '0')}</span>
         ${hasGold ? '<div class="fns-gold-badge" title="Gold-Filter umschalten">★ GOLD</div>' : ''}
         <div class="fns-sticker-img-wrap">
           <img src="${def.file}" alt="${unlocked ? def.levelName : '???'}" class="${showGold ? 'fns-gold-img' : ''}" />
         </div>
-        <div class="fns-sticker-loc">${unlocked ? def.levelName : `??? (${def.levelName})`}</div>
+        <div class="fns-sticker-loc">${def.isEighthSticker ? (unlocked ? def.name : "???") : def.levelName}</div>
       `;
 
       const imgEl = card.querySelector('img');

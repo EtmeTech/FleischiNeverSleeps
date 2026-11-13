@@ -1421,7 +1421,7 @@ export class SchoolLevelManager {
             this.spawnStairChaserAtBottom();
         }
 
-        if (this.hasWalkedInside && !this.slidingDoorClosed) {
+        if (this.hasWalkedInside && (!this.slidingDoorClosed || this.player.position.z > -56.2)) {
             for (const g of this.patrolGuards) {
                 const mPos = g.group.position;
                 const horizDist = Math.hypot(localPlayerPos.x - mPos.x, localPlayerPos.z - mPos.z);
@@ -1559,3 +1559,5 @@ if (typeof window !== 'undefined' && typeof SchoolLevelManager !== 'undefined') 
     }
 })();
 
+
+if (typeof window !== "undefined" && typeof milanMode !== "undefined") { window.milanMode = milanMode; }

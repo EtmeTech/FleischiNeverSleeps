@@ -27,10 +27,15 @@ export class BackroomsLogic {
 
         this.swingDoorOpen(doorObj);
 
-        // Milan-Modus: deutlich höhere Chance, dass beim Türöffnen ein Fleischi spawnt
-        const spawnChance = milanMode.isMilan ? 0.40 : 0.10;
-        if (Math.random() < spawnChance && !this.countdownActive) {
-            this.startCountdown(doorObj);
+        // Im Multiplayer würfelt nur der öffnende Spieler und synchronisiert den Countdown an alle!
+        if (!this.__mpRemoteDoor) {
+            const spawnChance = milanMode.isMilan ? 0.40 : 0.10;
+            if (Math.random() < spawnChance && !this.countdownActive) {
+                this.startCountdown(doorObj);
+                if (typeof window !== 'undefined' && typeof window.__fnsBroadcastCountdown === 'function') {
+                    window.__fnsBroadcastCountdown();
+                }
+            }
         }
     }
 
@@ -142,3 +147,5 @@ if (typeof window !== 'undefined' && typeof BackroomsLogic !== 'undefined') {
         };
     }
 })();
+
+if (typeof window !== "undefined" && typeof milanMode !== "undefined") { window.milanMode = milanMode; }

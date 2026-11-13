@@ -142,3 +142,5 @@ export class MidnightArena {
     }
 })();
 
+
+if (typeof window !== "undefined" && typeof milanMode !== "undefined") { window.milanMode = milanMode; }
