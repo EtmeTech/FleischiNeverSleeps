@@ -638,6 +638,397 @@
         border-color: #ff4422;
         color: #ffffff;
       }
+
+      /* === RESPONSIVE HANDY vs. TABLET OVERRIDES (NUR AUF MOBILE AKTIV!) === */
+      /* Erlaube Touch-Scrollen in Menüs & Ziehen von Slidern! */
+      #fns-sticker-menu-view,
+      #fns-sticker-menu-view *,
+      .menu-modal-box,
+      .menu-modal-box *,
+      #menu-mp-inline,
+      #menu-mp-inline *,
+      #fns-mp-lobbies-grid,
+      #fns-mp-lobbies-grid *,
+      #levels-inline-grid,
+      #levels-inline-grid * {
+        touch-action: pan-y !important;
+        -webkit-overflow-scrolling: touch !important;
+      }
+      input[type="range"],
+      .settings-slider {
+        touch-action: pan-x pan-y !important;
+        height: 28px !important;
+      }
+      input[type="text"],
+      input[type="password"] {
+        touch-action: manipulation !important;
+        user-select: text !important;
+        -webkit-user-select: text !important;
+      }
+
+      /* 1. STICKER-ARCHIV: Scrollbar, kein Überlappen mit CAM-Buttons & Footer */
+      #fns-sticker-menu-view {
+        position: fixed !important;
+        inset: 0 !important;
+        width: 100vw !important;
+        max-width: 100vw !important;
+        min-width: 0 !important;
+        height: 100vh !important;
+        background: rgba(6, 4, 4, 0.97) !important;
+        padding: clamp(8px, 2vh, 18px) clamp(12px, 3vw, 28px) 46px !important;
+        z-index: 880 !important;
+        overflow-y: auto !important;
+        box-sizing: border-box !important;
+      }
+      .fns-sticker-topbar {
+        height: auto !important;
+        min-height: 34px !important;
+        margin-bottom: 8px !important;
+        padding-bottom: 6px !important;
+        padding-right: 48px !important; /* Platz für Vollbild-Button rechts oben */
+      }
+      #fns-sticker-back-btn {
+        padding: 6px 14px !important;
+        font-size: clamp(12px, 1.8vw, 15px) !important;
+      }
+      .fns-sticker-heading {
+        font-size: clamp(14px, 2.2vw, 20px) !important;
+      }
+      .fns-sticker-stats {
+        font-size: clamp(12px, 1.8vw, 15px) !important;
+      }
+      .fns-sticker-grid {
+        display: grid !important;
+        grid-template-columns: repeat(4, 1fr) !important;
+        grid-template-rows: none !important;
+        grid-auto-rows: clamp(92px, 23vh, 145px) !important;
+        gap: clamp(6px, 1.2vw, 12px) !important;
+        padding-bottom: 28px !important;
+      }
+      .fns-sticker-card {
+        height: 100% !important;
+        padding: 4px !important;
+      }
+      .fns-sticker-img-wrap {
+        width: clamp(50px, 13vh, 96px) !important;
+        height: clamp(50px, 13vh, 96px) !important;
+        margin: 2px auto 0 auto !important;
+      }
+      .fns-sticker-img-wrap img {
+        width: 94% !important;
+        height: 94% !important;
+      }
+      .fns-sticker-loc {
+        font-size: clamp(9px, 1.3vw, 12px) !important;
+        line-height: 14px !important;
+      }
+
+      /* 2. MULTIPLAYER-MENÜ: Passt komplett auf Handy & Tablet (Back-Button oben immer sichtbar!) */
+      body.fns-mp-open #menu-title-block,
+      body.fns-mp-open #cctv-cam-buttons,
+      body.fns-mp-open #secret-fleischi-dossier {
+        display: none !important;
+      }
+      body.fns-mp-open #menu-bottom-left {
+        top: 8px !important;
+        bottom: 28px !important;
+        left: 12px !important;
+        right: 12px !important;
+        display: flex !important;
+        align-items: stretch !important;
+      }
+      #menu-mp-inline {
+        width: 100% !important;
+        max-height: calc(100vh - 36px) !important;
+        gap: clamp(6px, 1.4vh, 12px) !important;
+        padding: 2px 4px 12px 4px !important;
+        overflow-y: auto !important;
+        box-sizing: border-box !important;
+      }
+      #btn-mp-back {
+        width: clamp(95px, 16vw, 140px) !important;
+        padding: clamp(5px, 1.2vh, 9px) 12px !important;
+        font-size: clamp(12px, 1.8vw, 16px) !important;
+        min-height: 30px !important;
+      }
+      .fns-mp-profile-row {
+        padding: clamp(5px, 1.2vh, 10px) 12px !important;
+        gap: clamp(8px, 2vw, 18px) !important;
+      }
+      .fns-mp-label {
+        font-size: clamp(11px, 1.5vw, 14px) !important;
+      }
+      .fns-mp-inline-input {
+        padding: clamp(5px, 1vh, 8px) 10px !important;
+        font-size: clamp(12px, 1.6vw, 15px) !important;
+        width: clamp(135px, 22vw, 200px) !important;
+      }
+      .fns-mp-swatch {
+        width: clamp(18px, 3.2vh, 24px) !important;
+        height: clamp(18px, 3.2vh, 24px) !important;
+      }
+      .fns-mp-main-grid {
+        gap: clamp(8px, 1.8vw, 16px) !important;
+        flex: 1 !important;
+        min-height: 0 !important;
+      }
+      .fns-mp-col {
+        height: clamp(178px, 54vh, 290px) !important;
+        padding: clamp(8px, 1.6vh, 14px) clamp(10px, 1.8vw, 16px) !important;
+        gap: clamp(5px, 1vh, 10px) !important;
+      }
+      .fns-mp-col-header {
+        font-size: clamp(12px, 1.7vw, 15px) !important;
+        padding-bottom: 4px !important;
+        margin-bottom: 2px !important;
+      }
+      .fns-mp-diff-btn {
+        padding: clamp(5px, 1vh, 8px) 4px !important;
+        font-size: clamp(11px, 1.5vw, 14px) !important;
+      }
+      #btn-mp-start-create {
+        padding: clamp(6px, 1.3vh, 11px) 10px !important;
+        font-size: clamp(13px, 1.8vw, 16px) !important;
+        min-height: 32px !important;
+      }
+      .fns-mp-lobby-card {
+        padding: clamp(6px, 1.2vh, 10px) 10px !important;
+      }
+      .fns-mp-lobby-title {
+        font-size: clamp(12px, 1.6vw, 15px) !important;
+      }
+      .fns-mp-join-badge {
+        padding: 5px 10px !important;
+        font-size: clamp(11px, 1.4vw, 13px) !important;
+      }
+
+      /* 3. MINIMAP (MEGA LABYRINTH & BIBLIOTHEK): KLEIN OBEN LINKS STATT AUF DEM JOYSTICK! */
+      #minimap-container {
+        top: 8px !important;
+        left: 10px !important;
+        bottom: auto !important;
+        right: auto !important;
+        width: clamp(98px, 18vw, 155px) !important;
+        padding: 4px !important;
+        border-width: 2px !important;
+        z-index: 170 !important;
+      }
+      #minimap-header {
+        font-size: clamp(9px, 1.3vw, 12px) !important;
+        margin-bottom: 3px !important;
+        padding-bottom: 2px !important;
+      }
+      #minimap-canvas {
+        width: 100% !important;
+        height: auto !important;
+        aspect-ratio: 1 / 1 !important;
+      }
+      #minimap-legend {
+        font-size: clamp(7px, 1vw, 9px) !important;
+        margin-top: 3px !important;
+        gap: 2px !important;
+        flex-wrap: wrap !important;
+      }
+      #minimap-legend svg {
+        width: 6px !important;
+        height: 6px !important;
+      }
+
+      /* 4. BOSSFIGHT HUD OBEN LINKS: DEUTLICH KOMPAKTER */
+      #fns-boss-hp-hud {
+        top: 8px !important;
+        left: 10px !important;
+        width: clamp(145px, 26vw, 225px) !important;
+        padding: 5px 8px !important;
+      }
+      #fns-boss-hp-hud span {
+        font-size: clamp(10px, 1.4vw, 13px) !important;
+      }
+      #fns-boss-hp-hud > div:nth-child(2) {
+        height: 8px !important;
+        margin-bottom: 5px !important;
+      }
+      #fns-boss-hp-hud > div:nth-child(4) {
+        height: 5px !important;
+      }
+      #fns-gym-boss-hud {
+        display: none !important;
+      }
+
+      /* 5. IN-GAME LEVEL-HINWEISE (#hud-message): KOMPAKT OBEN MITTIG, VERSPERRT NICHT DEN SCREEN! */
+      #hud-message {
+        top: 8px !important;
+        bottom: auto !important;
+        left: 50% !important;
+        transform: translateX(-50%) !important;
+        font-size: clamp(10px, 1.6vw, 14px) !important;
+        line-height: 1.25 !important;
+        padding: 5px 12px !important;
+        max-width: 52vw !important;
+        border-width: 1px !important;
+        background: rgba(5, 2, 2, 0.88) !important;
+        pointer-events: none !important;
+      }
+
+      /* 6. EINSTELLUNGEN MODAL (#modal-settings): TOUCH-FREUNDLICH & KOMPAKT */
+      .menu-modal-box {
+        width: min(520px, 90vw) !important;
+        max-height: calc(100vh - 36px) !important;
+        padding: clamp(10px, 2.2vh, 20px) clamp(14px, 3vw, 24px) !important;
+        overflow-y: auto !important;
+        box-sizing: border-box !important;
+      }
+      .modal-header {
+        padding-bottom: 8px !important;
+        margin-bottom: 10px !important;
+      }
+      .modal-header h2 {
+        font-size: clamp(16px, 2.5vw, 22px) !important;
+      }
+      .modal-close-btn {
+        padding: 6px 14px !important;
+        font-size: 13px !important;
+      }
+      .settings-section-title {
+        font-size: 13px !important;
+        margin: 6px 0 6px 0 !important;
+      }
+      .settings-row {
+        padding: 6px 0 !important;
+        font-size: clamp(12px, 1.8vw, 15px) !important;
+      }
+      .settings-slider {
+        width: clamp(140px, 36vw, 220px) !important;
+      }
+      /* Tastatur-Keybinds (KeyW, KeyS...) auf Mobile ausblenden, da Touch-Steuerung aktiv ist */
+      #keybinds-grid,
+      .settings-section-title:nth-of-type(2) {
+        display: none !important;
+      }
+
+      /* === FIX 1: SCHWIERIGKEITS-AUSWAHL (MATS / PRAETI / MILAN) AUF HANDY & TABLET === */
+      body.fns-diff-open #menu-title-block,
+      body.fns-diff-open #cctv-cam-buttons,
+      body.fns-diff-open #secret-fleischi-dossier {
+        display: none !important;
+      }
+      body.fns-diff-open #menu-bottom-left {
+        top: 8px !important;
+        bottom: 26px !important;
+        left: 14px !important;
+        right: 14px !important;
+        display: flex !important;
+        align-items: flex-start !important;
+      }
+      #menu-difficulty-inline {
+        width: 100% !important;
+        max-height: calc(100vh - 34px) !important;
+        gap: clamp(6px, 1.4vh, 12px) !important;
+        box-sizing: border-box !important;
+      }
+      #btn-difficulty-back {
+        width: clamp(95px, 15vw, 145px) !important;
+        padding: clamp(5px, 1vh, 9px) 14px !important;
+        font-size: clamp(12px, 1.8vw, 16px) !important;
+        min-height: 28px !important;
+        flex-shrink: 0 !important;
+      }
+      .fns-diff-grid {
+        display: grid !important;
+        grid-template-columns: repeat(3, minmax(105px, 195px)) !important;
+        gap: clamp(8px, 1.8vw, 16px) !important;
+        width: 100% !important;
+        max-width: 640px !important;
+      }
+      .fns-diff-card {
+        padding: clamp(6px, 1.3vh, 12px) !important;
+        gap: clamp(4px, 0.9vh, 8px) !important;
+      }
+      .fns-diff-name {
+        font-size: clamp(14px, 2.2vw, 22px) !important;
+      }
+      .fns-diff-img {
+        width: clamp(68px, 25vh, 142px) !important;
+        height: clamp(68px, 25vh, 142px) !important;
+      }
+      .fns-diff-label {
+        font-size: clamp(11px, 1.6vw, 16px) !important;
+      }
+      .fns-diff-play-btn {
+        padding: clamp(5px, 1vh, 9px) 0 !important;
+        font-size: clamp(12px, 1.8vw, 16px) !important;
+      }
+
+      /* === FIX 2: NORMAL HOHER CROUCH-BUTTON & GRÖSSERE MINIMAP OBEN LINKS === */
+      .fns-joystick-zone {
+        bottom: 12px !important;
+        width: clamp(108px, 27vh, 136px) !important;
+        height: clamp(108px, 27vh, 136px) !important;
+      }
+      #fns-left-controls {
+        bottom: clamp(126px, 31vh, 156px) !important;
+        left: 18px !important;
+        width: clamp(108px, 27vh, 136px) !important;
+      }
+      #fns-right-controls {
+        bottom: clamp(126px, 31vh, 156px) !important;
+        right: 18px !important;
+        width: clamp(118px, 29vh, 136px) !important;
+      }
+      #fns-btn-crouch,
+      #fns-btn-use,
+      #fns-btn-jump {
+        height: clamp(38px, 9.5vh, 44px) !important;
+        font-size: clamp(13px, 1.8vw, 16px) !important;
+        padding: 0 8px !important;
+      }
+      #minimap-container {
+        top: 8px !important;
+        left: 12px !important;
+        bottom: auto !important;
+        right: auto !important;
+        width: clamp(124px, 35vh, 185px) !important;
+        padding: 5px !important;
+      }
+      @media (max-height: 500px) {
+        #minimap-legend {
+          display: none !important;
+        }
+      }
+      #fns-left-controls {
+        bottom: clamp(122px, 30.5vh, 150px) !important;
+        left: 18px !important;
+        width: clamp(106px, 27vh, 134px) !important;
+      }
+      #fns-btn-crouch {
+        height: clamp(25px, 6.2vh, 34px) !important;
+        font-size: clamp(11px, 1.5vw, 14px) !important;
+        padding: 0 6px !important;
+      }
+      #fns-right-controls {
+        bottom: clamp(122px, 30.5vh, 150px) !important;
+        right: 18px !important;
+        width: clamp(116px, 29vh, 136px) !important;
+      }
+      #fns-btn-use, #fns-btn-jump {
+        height: clamp(32px, 7.8vh, 42px) !important;
+        font-size: clamp(12px, 1.6vw, 15px) !important;
+      }
+      #minimap-container {
+        top: 6px !important;
+        left: 10px !important;
+        bottom: auto !important;
+        right: auto !important;
+        width: clamp(84px, 26vh, 145px) !important;
+        padding: 3px !important;
+      }
+      @media (max-height: 500px) {
+        #minimap-legend {
+          display: none !important;
+        }
+      }
+
+
     `;
     document.head.appendChild(style);
 
@@ -855,7 +1246,7 @@
           const dy = t.clientY - lastSwipeY;
           lastSwipeX = t.clientX;
           lastSwipeY = t.clientY;
-          document.dispatchEvent(new MouseEvent('mousemove', { movementX: dx * 1.5, movementY: dy * 1.5, bubbles: true }));
+          document.dispatchEvent(new MouseEvent('mousemove', { movementX: dx * 1.5 * ((parseInt(document.getElementById('setting-sensitivity')?.value || '100', 10)) / 100), movementY: dy * 1.5 * ((parseInt(document.getElementById('setting-sensitivity')?.value || '100', 10)) / 100), bubbles: true }));
           break;
         }
       }
@@ -903,6 +1294,9 @@
       const isStickerOpen = stickerView && window.getComputedStyle(stickerView).display !== 'none';
       const modalSettings = document.getElementById('modal-settings');
       const isSettingsOpen = modalSettings && window.getComputedStyle(modalSettings).display !== 'none';
+      const mpInline = document.getElementById('menu-mp-inline');
+      const isMpOpen = mpInline && window.getComputedStyle(mpInline).display !== 'none';
+      document.body.classList.toggle('fns-mp-open', !!isMpOpen);
 
       const isDiffOpen = Array.from(document.querySelectorAll('button, .horror-menu-btn, .btn')).some(b => {
         if (!b || !b.isConnected) return false;
@@ -913,9 +1307,9 @@
       document.body.classList.toggle('fns-hide-subtitle', isLevelsOpen || isDiffOpen || isStickerOpen || isSettingsOpen);
 
       const cctv = document.getElementById('cctv-cam-buttons');
-      if (cctv) cctv.style.display = (isStickerOpen || isSettingsOpen) ? 'none' : '';
+      if (cctv) cctv.style.display = (isStickerOpen || isSettingsOpen || isMpOpen) ? 'none' : '';
       const dossier = document.getElementById('secret-fleischi-dossier');
-      if (dossier) dossier.style.display = (isStickerOpen || isSettingsOpen || isDiffOpen) ? 'none' : '';
+      if (dossier) dossier.style.display = (isStickerOpen || isSettingsOpen || isDiffOpen || isMpOpen) ? 'none' : '';
 
       const isMilan = !!(
         window.DifficultyManager &&
